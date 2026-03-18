@@ -1,0 +1,38 @@
+{
+  "mode travail": {
+    "description": "Prépare le PC pour travailler",
+    "commands": [
+      "mets le volume à 50%",
+      "ouvre Chrome"
+    ],
+    "delay_between": 1.5,
+    "builtin": true
+  },
+  "mode nuit": {
+    "description": "Prépare le PC pour la nuit",
+    "commands": [
+      "mets le volume à 0%",
+      "verrouille l'écran"
+    ],
+    "delay_between": 1.0,
+    "builtin": true
+  },
+  "mode cinéma": {
+    "description": "Mode lecture vidéo",
+    "commands": [
+      "mets le volume à 80%"
+    ],
+    "delay_between": 0.5,
+    "builtin": true
+  },
+  "démarrage": {
+    "description": "Rapport de démarrage du PC",
+    "commands": [
+      "montre les infos système",
+      "quelles applications sont ouvertes",
+      "infos réseau"
+    ],
+    "delay_between": 0.5,
+    "builtin": true
+  }
+}
