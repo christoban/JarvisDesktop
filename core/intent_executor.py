@@ -7,6 +7,8 @@ SEMAINE 4 — MERCREDI
   Mapping COMPLET : 50+ intentions → modules système, apps, fichiers, navigateur, audio
 """
 
+from pathlib import Path
+
 from config.logger import get_logger
 
 logger = get_logger(__name__)
@@ -419,31 +421,34 @@ class IntentExecutor:
         query = p.get("query") or p.get("name") or ""
         if not query:
             return self._err("Précise le nom du fichier à chercher.")
-        return self.fm.search_file(
+        result = self.fm.search_file(
             query,
             search_dirs=p.get("search_dirs"),
             max_results=int(p.get("max_results", 20)),
         )
+        return self._normalize_file_search_result(result)
 
     def _file_search_type(self, p):
         ext = p.get("extension") or p.get("type") or ""
         if not ext:
             return self._err("Précise le type de fichier (ex: .pdf, documents).")
-        return self.fm.search_by_type(
+        result = self.fm.search_by_type(
             ext,
             search_dirs=p.get("search_dirs"),
             max_results=int(p.get("max_results", 50)),
         )
+        return self._normalize_file_search_result(result)
 
     def _file_search_content(self, p):
         kw = p.get("keyword") or p.get("word") or p.get("query") or ""
         if not kw:
             return self._err("Précise le mot à chercher dans les fichiers.")
-        return self.fm.search_by_content(
+        result = self.fm.search_by_content(
             kw,
             search_dirs=p.get("search_dirs"),
             max_results=int(p.get("max_results", 20)),
         )
+        return self._normalize_file_search_result(result)
 
     def _file_open(self, p):
         path = p.get("path") or p.get("name") or ""
@@ -982,6 +987,52 @@ class IntentExecutor:
             from modules.window_manager import WindowManager
             self._window = WindowManager()
         return self._window
+
+    def _normalize_file_search_result(self, result: dict) -> dict:
+        """Normalise les résultats de recherche fichier en liste de dicts sous data.results."""
+        if not isinstance(result, dict):
+            return result
+        if not result.get("success"):
+            return result
+
+        data = result.get("data")
+        if not isinstance(data, dict):
+            return result
+
+        raw_items = data.get("results")
+        if raw_items is None:
+            raw_items = data.get("files")
+        if not isinstance(raw_items, list):
+            return result
+
+        normalized_items = []
+        for item in raw_items:
+            if isinstance(item, dict):
+                normalized_items.append(item)
+                continue
+
+            path = str(item or "")
+            is_dir = False
+            name = Path(path).name if path else ""
+            parent = str(Path(path).parent) if path else ""
+            normalized_items.append(
+                {
+                    "path": path,
+                    "name": name,
+                    "is_dir": is_dir,
+                    "parent": parent,
+                }
+            )
+
+        out = dict(result)
+        out_data = dict(data)
+        out_data["results"] = normalized_items
+        if "files" not in out_data:
+            out_data["files"] = normalized_items
+        if "count" not in out_data:
+            out_data["count"] = len(normalized_items)
+        out["data"] = out_data
+        return out
  
     # ══════════════════════════════════════════════════════════════════════════
     #  HELPERS

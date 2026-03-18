@@ -836,13 +836,24 @@ class Agent:
             # Mémoriser aussi le premier résultat trouvé pour "ouvre le"
             if results:
                 first = results[0]
+                if isinstance(first, dict):
+                    first_path = str(first.get("path", "") or "")
+                    first_name = str(first.get("name", "") or "")
+                    first_is_dir = bool(first.get("is_dir", False))
+                    first_parent = str(first.get("parent", "") or "")
+                else:
+                    first_path = str(first or "")
+                    first_name = Path(first_path).name if first_path else ""
+                    first_is_dir = False
+                    first_parent = str(Path(first_path).parent) if first_path else ""
+
                 self._memory.remember_event(
-                    "folder" if first.get("is_dir") else "file",
+                    "folder" if first_is_dir else "file",
                     {
-                        "path": first.get("path", ""),
-                        "name": first.get("name", ""),
-                        "is_dir": first.get("is_dir", False),
-                        "parent": first.get("parent", ""),
+                        "path": first_path,
+                        "name": first_name,
+                        "is_dir": first_is_dir,
+                        "parent": first_parent,
                     }
                 )
 

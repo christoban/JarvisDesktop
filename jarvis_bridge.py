@@ -383,12 +383,15 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
         result  = agent.handle_command(command)
         success = result.get("success", False)
         message = result.get("message", "")
+        data_field = result.get("data") or {}
+        is_clarification = isinstance(data_field, dict) and bool(
+            data_field.get("awaiting_choice") or data_field.get("incomplete")
+        )
         elapsed = int((time.time() - start) * 1000)
-        icon    = "✅" if success else "❌"
+        icon    = "✅" if success else ("ℹ" if is_clarification else "❌")
         print(f"  {icon} [{elapsed}ms] {message[:70]}")
 
         # Injection display si présent — fix réponse complète sur mobile
-        data_field = result.get("data") or {}
         if isinstance(data_field, dict) and data_field.get("display"):
             result = dict(result)
             result["message"] = result.get("message", "") + "\n\n" + data_field["display"]
@@ -415,6 +418,13 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
                     notif_type="task_done",
                     data={"command": command, "duration_ms": elapsed},
                 ))
+        elif is_clarification:
+            _notify_clients(_notification_payload(
+                "Precisions requises",
+                message or "Jarvis attend une precision pour continuer.",
+                notif_type="info",
+                data={"command": command},
+            ))
         else:
             _notify_clients(_notification_payload(
                 "Erreur execution",
