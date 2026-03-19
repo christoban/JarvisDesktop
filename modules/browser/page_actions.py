@@ -24,7 +24,7 @@ from typing import Any
 
 from config.logger import get_logger
 from config.settings import GROQ_API_KEY, GROQ_MODEL_NAME
-from browser.cdp_session import CDPSession, CDPTab
+from modules.browser.cdp_session import CDPSession, CDPTab
 
 logger = get_logger(__name__)
 

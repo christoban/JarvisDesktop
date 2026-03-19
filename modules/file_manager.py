@@ -82,6 +82,17 @@ class FileManager:
     #  MERCREDI — Recherche et consultation
     # ══════════════════════════════════════════════════════════════════════════
 
+    @staticmethod
+    def _get_all_drive_roots() -> list:
+        """Retourne les racines de tous les disques disponibles sur Windows."""
+        import string
+        roots = []
+        for letter in string.ascii_uppercase:
+            drive = Path(f"{letter}:\\")
+            if drive.exists():
+                roots.append(drive)
+        return roots
+
     def search_file(self, name: str, search_dirs: list = None, max_results: int = 20) -> dict:
         """
         Recherche un fichier par nom (partiel ou complet, insensible à la casse).
@@ -232,8 +243,9 @@ class FileManager:
         file_path = self._resolve_existing_path(requested_path, current_dir=current_dir)
 
         if file_path is None:
+            search_query = Path(requested_path).name or requested_path
             matches = self._search_entries(
-                requested_path.lower(),
+                search_query.lower(),
                 search_dirs,
                 target_type=target_type,
                 max_results=12,
@@ -241,7 +253,11 @@ class FileManager:
             if not matches:
                 return self._err(
                     f"Introuvable : '{path}'.",
-                    {"query": path, "searched_dirs": [str(d) for d in search_dirs]}
+                    {
+                        "query": path,
+                        "search_query": search_query,
+                        "searched_dirs": [str(d) for d in search_dirs],
+                    }
                 )
             if len(matches) == 1:
                 file_path = Path(matches[0]["path"])
@@ -262,6 +278,8 @@ class FileManager:
 
         if not file_path.exists():
             return self._err(f"Le chemin n'existe pas : '{file_path}'")
+
+        resolved_target = self._safe_resolve_path(file_path)
 
         try:
             import platform
@@ -296,8 +314,9 @@ class FileManager:
                     message,
                     {
                         **self._file_info_dict(file_path),
-                        "opened_path": str(file_path),
-                        "current_directory": str(file_path),
+                        "opened_path": resolved_target,
+                        "resolved_path": resolved_target,
+                        "current_directory": resolved_target,
                         "top_files": preview,
                     }
                 )
@@ -306,7 +325,8 @@ class FileManager:
                 f"Fichier ouvert : '{file_path.name}'",
                 {
                     **self._file_info_dict(file_path),
-                    "opened_path": str(file_path),
+                    "opened_path": resolved_target,
+                    "resolved_path": resolved_target,
                 }
             )
         except AttributeError:
@@ -320,15 +340,17 @@ class FileManager:
                     f"Dossier ouvert : '{file_path.name}'. Voulez-vous que j'ouvre un fichier précis dedans ?",
                     {
                         **self._file_info_dict(file_path),
-                        "opened_path": str(file_path),
-                        "current_directory": str(file_path),
+                        "opened_path": resolved_target,
+                        "resolved_path": resolved_target,
+                        "current_directory": resolved_target,
                     }
                 )
             return self._ok(
                 f"Fichier ouvert : '{file_path.name}'",
                 {
                     **self._file_info_dict(file_path),
-                    "opened_path": str(file_path),
+                    "opened_path": resolved_target,
+                    "resolved_path": resolved_target,
                 }
             )
         except Exception as e:
@@ -343,7 +365,34 @@ class FileManager:
             show_hidden : inclure les fichiers cachés (commençant par .)
         """
         folder = self._resolve_existing_path(path, current_dir=None) if path else Path.home()
-        folder = folder or Path(path) if path else Path.home()
+
+        # Si pas trouvé directement → chercher sur tous les disques
+        if (folder is None or not folder.exists()) and path:
+            # Chercher d'abord à la racine des disques, puis dans les dossiers standards
+            # Priorité aux disques non-système (D:, E:, F:...) puis C:, puis dossiers user
+            drive_roots = self._get_all_drive_roots()
+            non_system_drives = [d for d in drive_roots if d.drive.upper() != "C:"]
+            system_drive = [d for d in drive_roots if d.drive.upper() == "C:"]
+            search_order = non_system_drives + system_drive + list(self.search_dirs)
+
+            matches = self._search_entries(
+                Path(path.lstrip("/\\")).name.lower(),
+                search_order,
+                target_type="directory",
+                max_results=5,
+            )
+            if matches:
+                # Prendre le meilleur match
+                folder = Path(matches[0]["resolved_path"] or matches[0]["path"])
+            else:
+                return self._err(
+                    f"Dossier '{path}' introuvable sur cette machine.",
+                    {"query": path}
+                )
+
+        if not folder:
+            folder = Path.home()
+
         logger.info(f"Listage dossier : '{folder}'")
 
         if not folder.exists():
@@ -395,10 +444,13 @@ class FileManager:
             for i in items
         ]
 
+        resolved_folder = self._safe_resolve_path(folder)
+
         return self._ok(
             f"{len(folders)} dossier(s) et {len(files)} fichier(s) dans '{folder.name}'.",
             {
-                "path":    str(folder),
+                "path":    resolved_folder,
+                "resolved_path": resolved_folder,
                 "files":   [i for i in all_items if not i["is_dir"]],
                 "folders": [i for i in all_items if i["is_dir"]],
                 "total":   len(items),
@@ -1040,9 +1092,12 @@ $results | ConvertTo-Json -Compress
         except OSError:
             size, modified, created = 0, "N/A", "N/A"
 
+        resolved = self._safe_resolve_path(path)
+
         return {
             "name":      path.name,
             "path":      str(path),
+            "resolved_path": resolved,
             "parent":    str(path.parent),
             "extension": path.suffix.lower(),
             "size":      size,
@@ -1051,6 +1106,13 @@ $results | ConvertTo-Json -Compress
             "created":   created,
             "is_dir":    path.is_dir(),
         }
+
+    @staticmethod
+    def _safe_resolve_path(path: Path) -> str:
+        try:
+            return str(path.resolve(strict=False))
+        except OSError:
+            return str(path)
 
     @staticmethod
     def _format_size(size_bytes: int) -> str:

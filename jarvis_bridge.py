@@ -4,7 +4,7 @@ SEMAINE 7+8 — Communication directe sur le réseau local
 
 Routes :
   POST /api/command          ← Commande texte (Semaines 7)
-  POST /api/voice            ← Audio Whisper → transcription → exécution (Semaine 8)
+    POST /api/voice            ← Audio Azure Speech → transcription → exécution (Semaine 8)
   GET  /api/result/<id>      ← Polling résultat
   GET  /api/health           ← Statut PC + TTS + IA
   OPTIONS *                  ← CORS preflight (Expo dev)
@@ -18,9 +18,13 @@ Puis dans api.service.ts :
 """
 
 import base64
+import importlib
 import json
 import os
+import re
+import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 import threading
@@ -35,13 +39,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # ── Imports projet ────────────────────────────────────────────────────────────
 try:
     from config.settings import (
-        SECRET_TOKEN, OPENAI_API_KEY, OPENAI_WHISPER_MODEL,
+        SECRET_TOKEN, OPENAI_API_KEY,
+        AZURE_SPEECH_KEY, AZURE_SPEECH_REGION,
         OPENAI_TTS_MODEL, OPENAI_TTS_VOICE,
     )
 except ImportError:
     SECRET_TOKEN         = "menedona_2005_christoban_2026"
     OPENAI_API_KEY       = ""
-    OPENAI_WHISPER_MODEL = "whisper-1"
+    AZURE_SPEECH_KEY     = ""
+    AZURE_SPEECH_REGION  = "uaenorth"
     OPENAI_TTS_MODEL     = "tts-1"
     OPENAI_TTS_VOICE     = "alloy"
 
@@ -59,12 +65,104 @@ except ImportError as e:
     print(f"⚠  Import TTS : {e}")
     TTS_AVAILABLE = False
 
-# Whisper (OpenAI SDK)
+# Azure Speech SDK
 try:
-    from openai import OpenAI as _OpenAI
-    _OPENAI_SDK = True
+    import azure.cognitiveservices.speech as speechsdk
+    _AZURE_SPEECH_SDK = True
 except ImportError:
-    _OPENAI_SDK = False
+    _AZURE_SPEECH_SDK = False
+
+def _resolve_ffmpeg_exe() -> str:
+    """
+    Resolve ffmpeg executable path.
+    Priority:
+      1) imageio-ffmpeg bundled binary
+      2) system ffmpeg from PATH
+    """
+    try:
+        mod = importlib.import_module("imageio_ffmpeg")
+        return mod.get_ffmpeg_exe()
+    except Exception:
+        pass
+
+    sys_ffmpeg = shutil.which("ffmpeg")
+    if sys_ffmpeg:
+        return sys_ffmpeg
+
+    return ""
+
+
+def _clean_env_value(value: str) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().strip('"').strip("'")
+
+
+def _validate_azure_speech_config() -> tuple[bool, str, str, str]:
+    key = _clean_env_value(AZURE_SPEECH_KEY)
+    region = _clean_env_value(AZURE_SPEECH_REGION).lower()
+
+    if not key or key.startswith("VOTRE"):
+        return False, "AZURE_SPEECH_KEY non configuree", key, region
+    if not region:
+        return False, "AZURE_SPEECH_REGION non configuree", key, region
+
+    # Accept classic 32-char keys and longer Azure-issued keys.
+    # We only enforce alphanumeric characters and reasonable length bounds.
+    if not re.fullmatch(r"[A-Za-z0-9]{32,128}", key):
+        return False, (
+            "AZURE_SPEECH_KEY invalide (attendu: cle alphanumerique entre 32 et 128 caracteres)"
+        ), key, region
+
+    # Region should be a plain identifier (e.g. eastus, francecentral, uaenorth)
+    if not re.fullmatch(r"[a-z0-9]+", region):
+        return False, "AZURE_SPEECH_REGION invalide (exemple: eastus, francecentral, uaenorth)", key, region
+
+    return True, "", key, region
+
+
+def _convert_to_wav_for_azure(audio_bytes: bytes, fmt: str) -> tuple[bool, str, str]:
+    """
+    Convert input audio to PCM WAV 16k mono for Azure STT.
+    Returns: (ok, wav_path, error)
+    """
+    fmt = (fmt or "m4a").lower().strip().lstrip(".")
+    in_suffix = f".{fmt or 'm4a'}"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=in_suffix) as in_file:
+        in_file.write(audio_bytes)
+        in_path = in_file.name
+
+    out_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    out_path = out_file.name
+    out_file.close()
+
+    try:
+        ffmpeg_exe = _resolve_ffmpeg_exe()
+        if not ffmpeg_exe:
+            return False, "", "ffmpeg introuvable (installe imageio-ffmpeg ou ffmpeg systeme)"
+        cmd = [
+            ffmpeg_exe,
+            "-y",
+            "-i", in_path,
+            "-ac", "1",
+            "-ar", "16000",
+            "-f", "wav",
+            out_path,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            stderr = (proc.stderr or "").strip()
+            if "No such file or directory" in stderr and "ffmpeg" in stderr.lower():
+                return False, "", "ffmpeg introuvable (installe imageio-ffmpeg ou ffmpeg systeme)"
+            return False, "", f"Conversion audio vers wav echouee: {stderr[:300]}"
+
+        return True, out_path, ""
+    finally:
+        try:
+            os.unlink(in_path)
+        except Exception:
+            pass
 
 PORT = 7071
 
@@ -252,13 +350,20 @@ def _battery_monitor_loop():
         except Exception:
             pass
 
+        # Ping pour garder le tunnel actif
+        try:
+            import urllib.request
+            urllib.request.urlopen(f"http://localhost:{PORT}/api/health", timeout=2)
+        except Exception:
+            pass
+
         time.sleep(BATTERY_CHECK_INTERVAL_SEC)
 
 
-# ── Transcription Whisper ─────────────────────────────────────────────────────
+# ── Transcription Azure Speech ────────────────────────────────────────────────
 def transcribe_audio(audio_bytes: bytes, fmt: str = "m4a") -> dict:
     """
-    Transcrit un fichier audio via OpenAI Whisper API.
+    Transcrit un fichier audio via Azure Speech-to-Text.
     
     Args:
         audio_bytes: bytes bruts du fichier audio
@@ -267,34 +372,51 @@ def transcribe_audio(audio_bytes: bytes, fmt: str = "m4a") -> dict:
     Returns:
         {"success": bool, "text": str, "error": str}
     """
-    if not _OPENAI_SDK:
-        return {"success": False, "text": "", "error": "openai SDK absent — pip install openai"}
-    if not OPENAI_API_KEY or OPENAI_API_KEY.startswith("sk-proj-VOTRE"):
-        return {"success": False, "text": "", "error": "OPENAI_API_KEY non configurée"}
+    if not _AZURE_SPEECH_SDK:
+        return {
+            "success": False,
+            "text": "",
+            "error": "azure-cognitiveservices-speech absent — pip install azure-cognitiveservices-speech",
+        }
+
+    cfg_ok, cfg_err, speech_key, speech_region = _validate_azure_speech_config()
+    if not cfg_ok:
+        return {"success": False, "text": "", "error": cfg_err}
+
+    # Azure SDK is most reliable with PCM WAV; convert incoming mobile formats first.
+    conv_ok, wav_path, conv_err = _convert_to_wav_for_azure(audio_bytes, fmt)
+    if not conv_ok:
+        return {"success": False, "text": "", "error": conv_err}
 
     try:
-        client = _OpenAI(api_key=OPENAI_API_KEY)
+        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
+        speech_config.speech_recognition_language = "fr-FR"
+        audio_config = speechsdk.audio.AudioConfig(filename=wav_path)
+        recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
 
-        # Whisper accepte : flac, m4a, mp3, mp4, mpeg, mpga, oga, ogg, wav, webm
-        suffix = f".{fmt}"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-            f.write(audio_bytes)
-            tmp_path = f.name
+        result = recognizer.recognize_once_async().get()
+        if result.reason == speechsdk.ResultReason.RecognizedSpeech:
+            text = (result.text or "").strip()
+            return {"success": bool(text), "text": text, "error": "" if text else "Reconnaissance vide"}
 
-        try:
-            with open(tmp_path, "rb") as audio_file:
-                transcript = client.audio.transcriptions.create(
-                    model=OPENAI_WHISPER_MODEL,
-                    file=audio_file,
-                    language="fr",          # Forcer le français
-                    prompt="Commande pour contrôler un PC Windows. Jarvis.",
-                )
-            return {"success": True, "text": transcript.text.strip(), "error": ""}
-        finally:
-            os.unlink(tmp_path)
+        if result.reason == speechsdk.ResultReason.NoMatch:
+            return {"success": False, "text": "", "error": "Aucune parole reconnue"}
+
+        if result.reason == speechsdk.ResultReason.Canceled:
+            details = result.cancellation_details
+            err = details.error_details or str(details.reason)
+            return {"success": False, "text": "", "error": f"Azure Speech annule: {err}"}
+
+        return {"success": False, "text": "", "error": f"Azure Speech reason inattendue: {result.reason}"}
 
     except Exception as e:
         return {"success": False, "text": "", "error": str(e)}
+    finally:
+        try:
+            if wav_path:
+                os.unlink(wav_path)
+        except Exception:
+            pass
 
 
 # ── Exécution commande ────────────────────────────────────────────────────────
@@ -520,7 +642,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 "ai_available": ai_ok,
                 "tts_available": tts_ok,
                 "tts_backend":  getattr(tts, "backend", "none") if tts else "none",
-                "whisper_ready": _OPENAI_SDK and bool(OPENAI_API_KEY),
+                "stt_provider": "azure_speech",
+                "whisper_ready": _AZURE_SPEECH_SDK and bool(AZURE_SPEECH_KEY) and bool(AZURE_SPEECH_REGION),
                 "security_available": _SECURITY_AVAILABLE,
                 "security_mode": getattr(auth, "mode", "none") if auth is not None else "none",
                 "crypto_available": bool(getattr(crypto, "available", False)),
@@ -663,7 +786,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
             code = 200 if result.get("ok") else 404
             return self._json(result, code)
 
-        # ── Commande vocale (audio → Whisper → Agent → TTS) ──────────────────
+        # ── Commande vocale (audio → Azure Speech → Agent → TTS) ─────────────
         if path == "/api/voice":
             auth_result = self._auth(body=body, method="POST", path=path)
             if not auth_result["ok"]:
@@ -697,18 +820,18 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
             print(f"\n  🎤 [{device_id}] Audio reçu ({len(audio_bytes)/1024:.1f} KB, fmt={audio_fmt})")
 
-            # 1. Transcription Whisper
+            # 1. Transcription Azure Speech
             t0          = time.time()
             transcribed = transcribe_audio(audio_bytes, audio_fmt)
             t_whisper   = int((time.time() - t0) * 1000)
 
             if not transcribed["success"]:
-                print(f"  ❌ Whisper échoué : {transcribed['error']}")
+                print(f"  ❌ Azure Speech echoue : {transcribed['error']}")
                 return self._json({
                     "success":    False,
                     "error":      transcribed["error"],
                     "transcript": "",
-                    "step":       "whisper",
+                    "step":       "stt",
                 }, 500)
 
             transcript = transcribed["text"]
@@ -719,7 +842,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     "success":    False,
                     "error":      "Audio non reconnu (silence ou bruit ?)",
                     "transcript": "",
-                    "step":       "whisper",
+                    "step":       "stt",
                 }, 422)
 
             # 2. Exécution via agent (synchrone ici pour retourner le résultat complet)
@@ -780,7 +903,7 @@ if __name__ == "__main__":
     print()
     print("  Routes :")
     print("    POST /api/command  ← commande texte")
-    print("    POST /api/voice    ← audio (Whisper + TTS)")
+    print("    POST /api/voice    ← audio (Azure Speech + TTS)")
     print("    POST /api/notify   ← push notification vers mobile")
     print("    POST /api/confirm  ← confirmer/refuser action dangereuse")
     print("    GET  /api/result/<id>")
@@ -808,8 +931,11 @@ if __name__ == "__main__":
     else:
         print("  ⚠  TTS indisponible")
 
-    whisper_ok = _OPENAI_SDK and bool(OPENAI_API_KEY)
-    print(f"  {'✅' if whisper_ok else '⚠ '} Whisper STT — {'prêt' if whisper_ok else 'OPENAI_API_KEY manquante'}")
+    stt_ok = _AZURE_SPEECH_SDK and bool(AZURE_SPEECH_KEY) and bool(AZURE_SPEECH_REGION)
+    if stt_ok:
+        print(f"  ✅ Azure Speech STT — pret ({AZURE_SPEECH_REGION})")
+    else:
+        print("  ⚠  Azure Speech STT — config manquante (AZURE_SPEECH_KEY / AZURE_SPEECH_REGION)")
     auth = get_auth()
     perms = get_perms()
     crypto = get_crypto()

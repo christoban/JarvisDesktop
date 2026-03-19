@@ -7,6 +7,7 @@ SEMAINE 4 — MERCREDI
   Mapping COMPLET : 50+ intentions → modules système, apps, fichiers, navigateur, audio
 """
 
+import os
 from pathlib import Path
 
 from config.logger import get_logger
@@ -192,7 +193,19 @@ class IntentExecutor:
             )
 
         try:
-            return handler(params)
+            result = handler(params)
+
+            # Robustesse: certains handlers legacy peuvent renvoyer autre chose qu'un dict.
+            if isinstance(result, dict):
+                return result
+            if result is None:
+                return self._err(f"{intent}: aucun resultat renvoye.")
+            if isinstance(result, str):
+                return self._err(result or f"{intent}: resultat texte invalide")
+
+            return self._err(
+                f"{intent}: type de retour invalide ({type(result).__name__})"
+            )
         except Exception as e:
             logger.error(f"Erreur exécution intent={intent} : {e}", exc_info=True)
             return self._err(f"Erreur lors de l'exécution de '{intent}' : {str(e)}")
@@ -454,6 +467,117 @@ class IntentExecutor:
         path = p.get("path") or p.get("name") or ""
         if not path:
             return self._err("Précise le chemin ou nom du fichier à ouvrir.")
+
+        # ── PRIORITÉ 1 : mémoire persistante ─────────────────────────────────
+        # Si on a un chemin mémorisé récemment qui correspond, on l'utilise
+        # avant de faire confiance à un chemin reconstruit par Groq.
+        if self._raw_command_agent is not None:
+            memory = self._raw_command_agent._memory
+            path_name = Path(path).name.lower() if path else ""
+
+            for category in ("folder", "file"):
+                last = memory.recall_last(category)
+                if not isinstance(last, dict) or not last:
+                    continue
+
+                last_path = str(last.get("resolved_path") or last.get("path") or "")
+                last_name = str(last.get("name") or "").lower()
+                if not last_path:
+                    continue
+
+                if (
+                    last_name and path_name and
+                    (
+                        last_name == path_name or
+                        last_name in path_name or
+                        path_name in last_name
+                    )
+                ):
+                    real_path = Path(last_path)
+                    if real_path.exists():
+                        logger.info(f"FILE_OPEN depuis mémoire persistante : {last_path}")
+                        p = dict(p)
+                        p["path"] = last_path
+                        path = last_path
+                        break
+
+        is_just_name = (
+            os.sep not in path and
+            "/" not in path and
+            "\\" not in path
+        )
+
+        # Si c'est juste un nom → chercher dans la mémoire (compat legacy)
+        if is_just_name and self._raw_command_agent is not None:
+            memory = self._raw_command_agent._memory
+            for category in ("folder", "file"):
+                last = memory.recall_last(category)
+                if not isinstance(last, dict) or not last:
+                    continue
+                last_name = str(last.get("name", "")).lower()
+                last_path = str(last.get("resolved_path") or last.get("path") or "")
+                query_name = path.lower()
+                if (
+                    (last_name and query_name == last_name)
+                    or (last_name and query_name in last_name)
+                    or (last_name and last_name in query_name)
+                ) and last_path and Path(last_path).exists():
+                    logger.info(f"FILE_OPEN depuis mémoire : {last_path}")
+                    return self.fm.open_file(
+                        last_path,
+                        target_type=p.get("target_type", "any"),
+                        current_dir=p.get("current_dir"),
+                    )
+
+        # Chemin incomplet → chercher sur disque et ouvrir directement si un seul match
+        if is_just_name:
+            search_result = self._normalize_file_search_result(
+                self.fm.search_file(
+                    path,
+                    search_dirs=p.get("search_dirs"),
+                    max_results=5,
+                )
+            )
+            if search_result.get("success"):
+                results = (search_result.get("data") or {}).get("results") or []
+                target_type = p.get("target_type", "any")
+                if target_type == "directory":
+                    results = [r for r in results if r.get("is_dir")]
+                elif target_type == "file":
+                    results = [r for r in results if not r.get("is_dir")]
+
+                if len(results) == 1:
+                    found_path = results[0].get("path", path)
+                    return self.fm.open_file(
+                        found_path,
+                        target_type=target_type,
+                        current_dir=p.get("current_dir"),
+                    )
+                if len(results) > 1:
+                    choices = [
+                        {
+                            "path": r.get("path", ""),
+                            "name": r.get("name", ""),
+                            "is_dir": r.get("is_dir", False),
+                        }
+                        for r in results[:5]
+                    ]
+                    lines = [
+                        f"J'ai trouvé {len(results)} résultats pour '{path}'. Lequel ?"
+                    ]
+                    for i, r in enumerate(results[:5], 1):
+                        icon = "📁" if r.get("is_dir") else "📄"
+                        lines.append(f"  {i}. {icon} {r.get('name')} — {r.get('path')}")
+                    return self._ok(
+                        "\n".join(lines),
+                        {
+                            "awaiting_choice": True,
+                            "pending_intent": "FILE_OPEN",
+                            "choices": choices,
+                        }
+                    )
+
+        # Chemin direct
         return self.fm.open_file(
             path,
             search_dirs=p.get("search_dirs"),
@@ -518,7 +642,40 @@ class IntentExecutor:
 
     def _folder_list(self, p):
         path = p.get("path") or p.get("folder") or None
-        return self.fm.list_folder(path)
+        result = self.fm.list_folder(path)
+
+        # S'assurer que le chemin résolu est dans data pour la mémoire
+        if result.get("success"):
+            data = result.get("data") or {}
+            resolved = data.get("path")
+
+            # Si le module renvoie un chemin ambigu, tenter une résolution stable
+            if path and (not resolved or str(resolved).startswith(('/', '\\')) and len(str(resolved)) <= 3):
+                candidate_name = str(path).lstrip('/\\')
+                search_roots = [
+                    Path.home(),
+                    Path.home() / "Documents",
+                    Path.home() / "Desktop",
+                    Path("C:/"),
+                    Path("D:/"),
+                    Path("E:/"),
+                ]
+                for root in search_roots:
+                    candidate = root / candidate_name
+                    if candidate.exists() and candidate.is_dir():
+                        resolved = str(candidate)
+                        break
+
+            if resolved:
+                out = dict(result)
+                out_data = dict(data)
+                out_data["resolved_path"] = resolved
+                out_data["path"] = resolved
+                out_data["resolved"] = True
+                out["data"] = out_data
+                return out
+
+        return result
 
     def _folder_create(self, p):
         path = p.get("path") or p.get("name") or ""
@@ -932,7 +1089,7 @@ class IntentExecutor:
     def bc(self):
         """BrowserControl"""
         if self._bc is None:
-            from modules.browser_control import BrowserControl
+            from modules.browser.browser_control import BrowserControl
             self._bc = BrowserControl()
         return self._bc
  

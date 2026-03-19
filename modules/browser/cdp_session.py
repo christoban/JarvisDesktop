@@ -115,19 +115,27 @@ class CDPSession:
         except Exception:
             return []
 
+        all_tabs = []
         tabs = []
         for item in payload:
             if item.get("type") != "page":
                 continue
             url = item.get("url") or ""
-            if not include_internal and url.startswith("chrome://"):
-                continue
-            tabs.append(CDPTab(
+            tab = CDPTab(
                 id=item.get("id", ""),
                 title=item.get("title") or "",
                 url=url,
                 websocket_url=item.get("webSocketDebuggerUrl") or "",
-            ))
+            )
+            all_tabs.append(tab)
+            if not include_internal and url.startswith("chrome://"):
+                continue
+            tabs.append(tab)
+
+        # Si seuls des onglets internes existent (ex: chrome://newtab),
+        # on les retourne quand même pour pouvoir piloter la session.
+        if not tabs and not include_internal:
+            return all_tabs
         return tabs
 
     def list_tabs(self) -> dict:
@@ -169,13 +177,15 @@ class CDPSession:
             return ready
 
         url = normalize_url(url) if url and url != "about:blank" else "about:blank"
+        endpoint = f"{self._base}/json/new?{urllib.parse.quote(url, safe=':/?&=%')}"
         try:
-            resp = requests.get(
-                f"{self._base}/json/new?{urllib.parse.quote(url, safe=':/?&=%')}",
-                timeout=3,
-            )
+            # Chrome récent préfère souvent PUT sur /json/new.
+            resp = requests.put(endpoint, timeout=3)
             if resp.status_code >= 400:
-                return self._err("Impossible d'ouvrir un nouvel onglet.")
+                # Fallback anciennes versions/outils : GET
+                resp = requests.get(endpoint, timeout=3)
+            if resp.status_code >= 400:
+                return self._err(f"Impossible d'ouvrir un nouvel onglet (HTTP {resp.status_code}).")
             data = resp.json() if resp.text else {}
             return self._ok("Nouvel onglet ouvert.", {"url": url, "title": data.get("title", "")})
         except Exception as e:
@@ -276,7 +286,7 @@ class CDPSession:
             return self._err("Cet onglet n'expose pas de socket DevTools.")
 
         try:
-            ws = create_connection(tab.websocket_url, timeout=5)
+            ws = create_connection(tab.websocket_url, timeout=5, suppress_origin=True)
             ws.send(json.dumps({"id": 1, "method": method, "params": params or {}}))
             raw = ws.recv()
             ws.close()
@@ -380,6 +390,7 @@ class CDPSession:
         ]
         flags = [
             f"--remote-debugging-port={self.debug_port}",
+            "--remote-allow-origins=*",
             f"--user-data-dir={profile_dir}",
             "--no-first-run",
             "--no-default-browser-check",

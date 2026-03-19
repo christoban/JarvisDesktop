@@ -1,11 +1,64 @@
 {
-  "last_session": "2026-03-18 18:04",
-  "preferences": {},
-  "facts": {},
-  "events": {},
-  "stats": {
-    "session_count": 2
+  "last_session": "2026-03-19 20:48",
+  "preferences": {
+    "folder_counts": {
+      "E:\\films": 4
+    },
+    "favorite_folders": [
+      "E:\\films"
+    ]
   },
-  "session_count": 2,
-  "_saved_at": "2026-03-18 18:04:06"
+  "facts": {},
+  "events": {
+    "folder": [
+      {
+        "path": "E:\\films",
+        "name": "films",
+        "is_dir": true,
+        "parent": "E:\\",
+        "timestamp": 1773942809,
+        "datetime": "2026-03-19 18:53"
+      },
+      {
+        "path": "E:\\films",
+        "name": "films",
+        "is_dir": true,
+        "parent": "E:\\",
+        "timestamp": 1773942771,
+        "datetime": "2026-03-19 18:52"
+      },
+      {
+        "path": "E:\\films",
+        "name": "films",
+        "is_dir": true,
+        "parent": "E:\\",
+        "timestamp": 1773942585,
+        "datetime": "2026-03-19 18:49"
+      },
+      {
+        "path": "E:\\films",
+        "name": "films",
+        "is_dir": true,
+        "parent": "E:\\",
+        "timestamp": 1773877596,
+        "datetime": "2026-03-19 00:46"
+      }
+    ],
+    "file": [
+      {
+        "path": "E:\\films\\GODZILLA XKONG.mp4",
+        "name": "GODZILLA XKONG.mp4",
+        "is_dir": false,
+        "parent": "E:\\films",
+        "timestamp": 1773942859,
+        "datetime": "2026-03-19 18:54"
+      }
+    ]
+  },
+  "stats": {
+    "session_count": 31,
+    "total_commands": 5
+  },
+  "session_count": 31,
+  "_saved_at": "2026-03-19 20:48:28"
 }

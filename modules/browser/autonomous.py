@@ -21,8 +21,8 @@ from typing import Any
 
 from config.logger import get_logger
 from config.settings import GROQ_API_KEY, GROQ_MODEL_NAME
-from browser.cdp_session import CDPSession, CDPTab, normalize_url
-from browser.page_actions import PageActions
+from modules.browser.cdp_session import CDPSession, CDPTab, normalize_url
+from modules.browser.page_actions import PageActions
 
 logger = get_logger(__name__)
 
@@ -235,7 +235,7 @@ class AutonomousBrowser:
         for i, step in enumerate(steps_description):
             logger.info(f"Multi-step navigateur {i+1}/{len(steps_description)}: {step}")
             # Import ici pour éviter import circulaire
-            from modules.browser_control import BrowserControl
+            from modules.browser.browser_control import BrowserControl
             bc = BrowserControl()
             # Exécution simplifiée — chaque step est une commande dispatch
             result = bc.dispatch(step)

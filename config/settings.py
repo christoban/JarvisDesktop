@@ -37,8 +37,8 @@ OPENAI_WHISPER_MODEL= os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
 # ─────────────────────────────────────────
 #  AZURE SPEECH
 # ─────────────────────────────────────────
-# AZURE_SPEECH_KEY    = os.getenv("AZURE_SPEECH_KEY", "")
-# AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastus")
+AZURE_SPEECH_KEY    = os.getenv("AZURE_SPEECH_KEY", "")
+AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastus")
 
 # ─────────────────────────────────────────
 #  AZURE FUNCTION
@@ -81,7 +81,6 @@ def check_config():
     missing = []
     critical_keys = {
         "GROQ_API_KEY": GROQ_API_KEY,
-        "OPENAI_API_KEY": OPENAI_API_KEY,
         "SECRET_TOKEN": SECRET_TOKEN,
     }
     for name, value in critical_keys.items():
@@ -91,6 +90,11 @@ def check_config():
     if missing:
         print(f"⚠️  ATTENTION — Clés manquantes dans .env : {', '.join(missing)}")
         return False
+
+    if not AZURE_SPEECH_KEY or AZURE_SPEECH_KEY.startswith("VOTRE"):
+        print("⚠️  AZURE_SPEECH_KEY manquante — la page vocale ne pourra pas transcrire.")
+    if not AZURE_SPEECH_REGION:
+        print("⚠️  AZURE_SPEECH_REGION manquante — la page vocale ne pourra pas transcrire.")
 
     print("✅ Configuration chargée avec succès.")
     return True

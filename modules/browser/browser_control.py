@@ -37,9 +37,9 @@ import subprocess
 import re
 from urllib.parse import quote_plus
 from config.logger import get_logger
-from browser.cdp_session import CDPSession, normalize_url
-from browser.page_actions import PageActions
-from browser.autonomous import AutonomousBrowser, SITE_MAP, SITE_SEARCH_URLS
+from modules.browser.cdp_session import CDPSession, normalize_url
+from modules.browser.page_actions import PageActions
+from modules.browser.autonomous import AutonomousBrowser, SITE_MAP, SITE_SEARCH_URLS
 
 logger = get_logger(__name__)
 
@@ -81,6 +81,8 @@ class BrowserControl:
                 tabs = self._session.get_tabs()
                 if tabs:
                     self._session.navigate_tab(tabs[0], url)
+                else:
+                    self._session.new_tab(url)
             msg = f"{browser.title()} ouvert"
             if url:
                 msg += f" sur {url}"
@@ -189,8 +191,14 @@ class BrowserControl:
 
         # CDP si dispo
         tab = self._session.resolve_tab(fallback_first=True, launch_if_missing=True)
-        if isinstance(tab, dict) and not tab.get("ambiguous"):
+        if not isinstance(tab, dict):
             return self._session.navigate_tab(tab, url)
+
+        # S'il n'y a pas encore d'onglet pilotable, en créer un.
+        if "Aucun onglet pilotable" in (tab.get("message") or ""):
+            created = self._session.new_tab(url)
+            if created.get("success"):
+                return created
 
         # Fallback OS
         try:
@@ -228,7 +236,7 @@ class BrowserControl:
                 else:
                     tab = self._session.resolve_tab(fallback_first=True, launch_if_missing=False)
                     if not isinstance(tab, dict) or tab.get("ambiguous"):
-                        from browser.cdp_session import CDPTab as _CDPTab
+                        from modules.browser.cdp_session import CDPTab as _CDPTab
                         if isinstance(tab, _CDPTab):
                             pass
                         else:

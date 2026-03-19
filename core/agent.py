@@ -249,6 +249,7 @@ class Agent:
         if self.context.has_pending():
             result = self._handle_followup(raw)
             if result is not None:
+                result = self._normalize_result(result)
                 self.context.add_user(raw)
                 # Générer une réponse naturelle pour le followup aussi
                 followup_intent = self.context.pending_context.get("intent", "FOLLOWUP")
@@ -322,6 +323,7 @@ class Agent:
 
         # ── Exécution ─────────────────────────────────────────────────────────
         result = self.executor.execute(intent, params, raw_command=raw, agent=self)
+        result = self._normalize_result(result)
 
         # ── Réponse naturelle JARVIS — générée dynamiquement par Groq ─────────
         # Plus de if/if/if avec des répliques figées.
@@ -368,6 +370,33 @@ class Agent:
             duration_ms=int((time.time() - started) * 1000),
         )
         return enriched
+
+    @staticmethod
+    def _normalize_result(result) -> dict:
+        """
+        Normalise les résultats venant de l'executor pour garantir un dict.
+        Evite les crashs si un handler retourne une string/list/None par erreur.
+        """
+        if isinstance(result, dict):
+            return result
+        if result is None:
+            return {
+                "success": False,
+                "message": "Execution vide renvoyee par l'intent executor.",
+                "data": {},
+            }
+        if isinstance(result, str):
+            text = result.strip()
+            return {
+                "success": False,
+                "message": text or "Execution invalide renvoyee par l'intent executor.",
+                "data": {"raw_result": result, "result_type": "str"},
+            }
+        return {
+            "success": False,
+            "message": f"Execution invalide (type={type(result).__name__}).",
+            "data": {"raw_result": str(result), "result_type": type(result).__name__},
+        }
 
     def _handle_followup(self, reply: str) -> dict | None:
         """
@@ -686,6 +715,8 @@ class Agent:
         return []
 
     def _update_navigation_context(self, intent: str, result: dict):
+        if not isinstance(result, dict):
+            return
         data = result.get("data") or {}
         if not isinstance(data, dict):
             return
@@ -716,6 +747,8 @@ class Agent:
                     self.context.current_directory = str(Path(opened_path).parent)
 
     def _update_interaction_context(self, intent: str, params: dict, result: dict):
+        if not isinstance(result, dict):
+            return
         data = result.get("data") or {}
         if not result.get("success"):
             return
@@ -800,6 +833,8 @@ class Agent:
         Met à jour la mémoire universelle après chaque action réussie.
         Fonctionne pour TOUTES les catégories automatiquement.
         """
+        if not isinstance(result, dict):
+            return
         if not result.get("success"):
             return
 
@@ -809,11 +844,15 @@ class Agent:
 
         # ── Fichiers & Dossiers ───────────────────────────────────────────────
         if intent in {"FILE_OPEN", "FOLDER_LIST", "FOLDER_CREATE"}:
+            # Priorité absolue au resolved_path retourné par file_manager.
+            # C'est le chemin absolu vérifié — jamais un chemin reconstruit.
             path = (
+                data.get("resolved_path") or
                 data.get("opened_path") or
-                data.get("path") or
-                params.get("path") or ""
+                data.get("path") or ""
             )
+            # Ne jamais utiliser params.get("path") pour la mémoire,
+            # car c'est souvent un nom partiel non résolu.
             is_dir = data.get("is_dir") or intent in {"FOLDER_LIST", "FOLDER_CREATE"}
             category = "folder" if is_dir else "file"
             if path:
