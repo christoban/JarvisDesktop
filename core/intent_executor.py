@@ -41,6 +41,7 @@ class IntentExecutor:
         self._macros = None
         self._power = None
         self._window = None
+        self._music = None  
         self._raw_command_agent = None
 
         # Table de dispatch : intent → méthode
@@ -137,6 +138,21 @@ class IntentExecutor:
             "AUDIO_VOLUME_SET":  self._audio_volume_set,
             "AUDIO_MUTE":        self._audio_mute,
             "AUDIO_PLAY":        self._audio_play,
+            # ── Musique (module complet semaine 3) ─────────────────────────
+            "MUSIC_PLAY":             self._music_play,
+            "MUSIC_PAUSE":            self._music_pause,
+            "MUSIC_RESUME":           self._music_resume,
+            "MUSIC_STOP":             self._music_stop,
+            "MUSIC_NEXT":             self._music_next,
+            "MUSIC_PREV":             self._music_prev,
+            "MUSIC_VOLUME":           self._music_volume,
+            "MUSIC_SHUFFLE":          self._music_shuffle,
+            "MUSIC_REPEAT":           self._music_repeat,
+            "MUSIC_CURRENT":          self._music_current,
+            "MUSIC_PLAYLIST_CREATE":  self._music_playlist_create,
+            "MUSIC_PLAYLIST_PLAY":    self._music_playlist_play,
+            "MUSIC_PLAYLIST_LIST":    self._music_playlist_list,
+            "MUSIC_LIBRARY_SCAN":     self._music_library_scan,
             # ── Documents ─────────────────────────────────────────────────────
             "DOC_READ":        self._doc_read,
             "DOC_SUMMARIZE":   self._doc_summarize,
@@ -810,10 +826,194 @@ class IntentExecutor:
         return self.au.mute()
  
     def _audio_play(self, p):
+        """
+        Jouer audio — délègue à MusicManager si disponible (semaine 3),
+        sinon fallback AudioManager (ouvre l'app par défaut).
+        """
         query = p.get("query") or p.get("title") or p.get("name") or ""
         if not query:
             return self._err("Précise le nom d'une chanson ou d'un artiste.")
+        # Essayer MusicManager si disponible
+        try:
+            music = self.music
+            if music is not None:
+                return music.play(query)
+        except Exception:
+            pass
+        # Fallback : ouvrir avec l'application par défaut
         return self.au.play(query)
+    
+    # ══════════════════════════════════════════════════════════════════════════
+    #  MUSIQUE — Semaine 3 (stubs intelligents pour semaine 2)
+    #  Ces handlers délèguent au module music/ dès qu'il sera créé.
+    #  En attendant : fallback AudioManager ou message informatif.
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _music_play(self, p):
+        """Jouer une musique — délègue à MusicManager si disponible, sinon AudioManager."""
+        query = p.get("query") or p.get("title") or p.get("name") or ""
+        if not query:
+            return self._err("Précise le nom d'une chanson, d'un artiste ou d'une playlist.")
+        # Essayer MusicManager (semaine 3) d'abord
+        try:
+            music = self.music
+            if music is not None:
+                return music.play(query)
+        except Exception:
+            pass
+        # Fallback : AudioManager.play()
+        return self.au.play(query)
+
+    def _music_pause(self, p):
+        """Pause musique — délègue à MusicManager ou AudioManager."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.pause()
+        except Exception:
+            pass
+        return self.au.pause()
+
+    def _music_resume(self, p):
+        """Reprendre la lecture."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.resume()
+        except Exception:
+            pass
+        return self.au.pause()  # toggle pause/resume sur AudioManager
+
+    def _music_stop(self, p):
+        """Arrêter la musique."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.stop()
+        except Exception:
+            pass
+        return self.au.stop()
+
+    def _music_next(self, p):
+        """Piste suivante."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.next_track()
+        except Exception:
+            pass
+        return self.au.next_track()
+
+    def _music_prev(self, p):
+        """Piste précédente."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.prev_track()
+        except Exception:
+            pass
+        return self.au.prev_track()
+
+    def _music_volume(self, p):
+        """Volume musique."""
+        level = p.get("level")
+        if level is None:
+            return self._err("Précise un niveau de volume (0-100).")
+        try:
+            music = self.music
+            if music is not None and hasattr(music, "set_volume"):
+                return music.set_volume(int(level))
+        except Exception:
+            pass
+        return self.au.set_volume(int(level))
+
+    def _music_shuffle(self, p):
+        """Activer/désactiver lecture aléatoire."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.toggle_shuffle()
+        except Exception:
+            pass
+        return self._ok("Mode aléatoire — disponible avec le module musique (semaine 3).", {})
+
+    def _music_repeat(self, p):
+        """Activer/désactiver répétition."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.toggle_repeat()
+        except Exception:
+            pass
+        return self._ok("Répétition — disponible avec le module musique (semaine 3).", {})
+
+    def _music_current(self, p):
+        """Quelle musique joue actuellement."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.current_song()
+        except Exception:
+            pass
+        return self._ok("Information sur la musique en cours — disponible avec le module musique (semaine 3).", {})
+
+    def _music_playlist_create(self, p):
+        """Créer une playlist."""
+        name = p.get("name") or ""
+        if not name:
+            return self._err("Précise le nom de la playlist à créer.")
+        try:
+            music = self.music
+            if music is not None:
+                return music.create_playlist(name)
+        except Exception:
+            pass
+        return self._ok(
+            f"Création de playlist '{name}' — disponible avec le module musique (semaine 3).",
+            {"name": name, "pending": True}
+        )
+
+    def _music_playlist_play(self, p):
+        """Jouer une playlist."""
+        name = p.get("name") or ""
+        if not name:
+            return self._err("Précise le nom de la playlist à jouer.")
+        try:
+            music = self.music
+            if music is not None:
+                return music.play_playlist(name)
+        except Exception:
+            pass
+        return self._ok(
+            f"Lecture playlist '{name}' — disponible avec le module musique (semaine 3).",
+            {"name": name, "pending": True}
+        )
+
+    def _music_playlist_list(self, p):
+        """Lister les playlists."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.list_playlists()
+        except Exception:
+            pass
+        return self._ok(
+            "Liste des playlists — disponible avec le module musique (semaine 3).",
+            {"playlists": [], "count": 0}
+        )
+
+    def _music_library_scan(self, p):
+        """Scanner la bibliothèque musicale."""
+        path = p.get("path") or ""
+        try:
+            music = self.music
+            if music is not None:
+                return music.scan_library(path or None)
+        except Exception:
+            pass
+        # Fallback : utiliser AudioManager.list_music()
+        dirs = [path] if path else None
+        return self.au.list_music(music_dirs=dirs)
 
     # ══════════════════════════════════════════════════════════════════════════
     #                               DOCUMENTS
@@ -1145,6 +1345,22 @@ class IntentExecutor:
             from modules.window_manager import WindowManager
             self._window = WindowManager()
         return self._window
+    
+    @property
+    def music(self):
+        """
+        MusicManager (semaine 3) — lazy init.
+        Retourne None si le module n'est pas encore développé.
+        Dès que modules/music/music_manager.py existera, il sera utilisé auto.
+        """
+        if self._music is None:
+            try:
+                from modules.music.music_manager import MusicManager
+                self._music = MusicManager()
+            except (ImportError, Exception):
+                # Module pas encore créé — normal en semaine 2
+                return None
+        return self._music
 
     def _normalize_file_search_result(self, result: dict) -> dict:
         """Normalise les résultats de recherche fichier en liste de dicts sous data.results."""
