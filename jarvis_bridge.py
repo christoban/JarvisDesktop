@@ -30,7 +30,11 @@ import tempfile
 import threading
 import time
 import uuid
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+try:
+    from http.server import ThreadingHTTPServer
+except ImportError:
+    ThreadingHTTPServer = HTTPServer  # Python < 3.7 fallback
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 

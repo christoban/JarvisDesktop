@@ -1,6 +1,12 @@
 """
 window_manager.py — Détection et fermeture de fenêtres Windows.
 Permet à Jarvis de raisonner sur les vraies fenêtres ouvertes, même hors contexte.
+
+CORRECTIONS SEMAINE 1 :
+  [B11] Ajout de gardes "if not WINDOWS_API_AVAILABLE" dans _close_single_window
+        et _close_browser_tab pour éviter NameError si win32 est absent.
+  [B12] Cache de 500ms pour list_open_windows() — évite de parcourir toutes
+        les fenêtres plusieurs fois par appel à close_window().
 """
 
 import time
@@ -24,6 +30,13 @@ try:
 except Exception as exc:
     WINDOWS_API_AVAILABLE = False
     WINDOWS_IMPORT_ERROR = exc
+    # Définir des stubs pour éviter les NameError dans les méthodes
+    gw = None
+    win32api = None
+    win32con = None
+    win32com = None
+    win32gui = None
+    win32process = None
 
 
 BROWSER_PROCESSES = {
@@ -62,12 +75,32 @@ GENERIC_WINDOW_TERMS = {
     "fenetre", "fenêtre", "window", "app", "application", "programme",
 }
 
+# Cache pour list_open_windows()
+_WINDOWS_CACHE_TTL = 0.5  # secondes
+
 
 class WindowManager:
-    def list_open_windows(self) -> list[dict]:
+
+    def __init__(self):
+        # CORRECTION B12 : cache pour list_open_windows
+        self._windows_cache: list[dict] = []
+        self._windows_cache_time: float = 0.0
+
+    def list_open_windows(self, force_refresh: bool = False) -> list[dict]:
+        """
+        Liste toutes les fenêtres ouvertes visibles.
+        CORRECTION B12 : résultat mis en cache 500ms pour éviter de réparcourir
+        toutes les fenêtres à chaque appel dans close_window().
+        """
+        # B11 : retourner vide immédiatement si les APIs win32 sont absentes
         if not WINDOWS_API_AVAILABLE:
             logger.warning(f"WindowManager indisponible: {WINDOWS_IMPORT_ERROR}")
             return []
+
+        # B12 : utiliser le cache si récent
+        now = time.time()
+        if not force_refresh and (now - self._windows_cache_time) < _WINDOWS_CACHE_TTL:
+            return self._windows_cache
 
         windows = []
         seen = set()
@@ -103,6 +136,9 @@ class WindowManager:
             }
             windows.append(entry)
 
+        # Mettre à jour le cache
+        self._windows_cache = windows
+        self._windows_cache_time = now
         return windows
 
     def close_window(
@@ -115,6 +151,13 @@ class WindowManager:
         pid: int | None = None,
         title_candidates: list[str] | None = None,
     ) -> dict:
+        # B11 : vérification en entrée si win32 absent
+        if not WINDOWS_API_AVAILABLE:
+            return self._err(
+                "Contrôle des fenêtres indisponible. "
+                "Installe les dépendances : pip install pygetwindow pywin32"
+            )
+
         if hwnd:
             match = self._find_window_by_hwnd(hwnd)
             if match is None:
@@ -154,6 +197,10 @@ class WindowManager:
         return self._close_single_window(entry)
 
     def _close_browser_tab(self, entry: dict) -> dict:
+        # B11 : garde contre l'absence des APIs win32
+        if not WINDOWS_API_AVAILABLE:
+            return self._err("Contrôle navigateur indisponible (win32 absent).")
+
         hwnd = entry.get("hwnd")
         title = entry.get("title") or "onglet navigateur"
         if not hwnd:
@@ -173,27 +220,28 @@ class WindowManager:
             self._focus_window(hwnd)
             time.sleep(0.12)
 
-            # Ctrl+W ferme l'onglet actif, pas toute la fenêtre.
             win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
             win32api.keybd_event(ord('W'), 0, 0, 0)
             win32api.keybd_event(ord('W'), 0, win32con.KEYEVENTF_KEYUP, 0)
             win32api.keybd_event(win32con.VK_CONTROL, 0, win32con.KEYEVENTF_KEYUP, 0)
             time.sleep(0.2)
 
+            # Invalider le cache après fermeture
+            self._windows_cache_time = 0.0
+
             return self._ok(
                 f"Onglet fermé : '{title}'.",
-                {
-                    "closed": [entry],
-                    "closed_title": title,
-                    "closed_hwnd": hwnd,
-                    "closed_scope": "tab",
-                },
+                {"closed": [entry], "closed_title": title, "closed_hwnd": hwnd, "closed_scope": "tab"},
             )
         except Exception as exc:
             logger.warning(f"Fermeture onglet échouée pour '{title}': {exc}")
             return self._err(f"Impossible de fermer l'onglet '{title}' : {exc}")
 
     def _focus_window(self, hwnd: int):
+        # B11 : vérification en entrée
+        if not WINDOWS_API_AVAILABLE:
+            raise RuntimeError("win32 non disponible")
+
         try:
             win32gui.SetForegroundWindow(hwnd)
             return
@@ -250,6 +298,10 @@ class WindowManager:
         return None
 
     def _close_single_window(self, entry: dict) -> dict:
+        # B11 : garde contre l'absence des APIs win32
+        if not WINDOWS_API_AVAILABLE:
+            return self._err("Contrôle des fenêtres indisponible (win32 absent).")
+
         hwnd = entry.get("hwnd")
         if not hwnd:
             return self._err("Fenêtre cible invalide.")
@@ -266,6 +318,8 @@ class WindowManager:
             for _ in range(10):
                 time.sleep(0.15)
                 if not win32gui.IsWindow(hwnd):
+                    # Invalider le cache après fermeture
+                    self._windows_cache_time = 0.0
                     return self._ok(
                         f"Fenêtre fermée : '{title}'.",
                         {"closed": [entry], "closed_title": title, "closed_hwnd": hwnd},

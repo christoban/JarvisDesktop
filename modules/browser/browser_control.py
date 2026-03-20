@@ -222,42 +222,41 @@ class BrowserControl:
             return self._err("Requête de recherche vide.")
 
         # CDP : recherche + extraction des résultats
-        if self._session.is_ready() or True:  # toujours essayer CDP
-            ready = self._session.ensure_session(launch_if_missing=True)
-            if ready["success"]:
-                search_url = SITE_SEARCH_URLS.get(engine.lower(), SITE_SEARCH_URLS["google"])
-                url = search_url.format(quote_plus(query))
+        ready = self._session.ensure_session(launch_if_missing=True)
+        if ready["success"]:
+            search_url = SITE_SEARCH_URLS.get(engine.lower(), SITE_SEARCH_URLS["google"])
+            url = search_url.format(quote_plus(query))
 
-                if new_tab:
-                    self._session.new_tab(url)
-                    time.sleep(1.5)
-                    tabs = self._session.get_tabs()
-                    tab = tabs[-1] if tabs else None
-                else:
-                    tab = self._session.resolve_tab(fallback_first=True, launch_if_missing=False)
-                    if not isinstance(tab, dict) or tab.get("ambiguous"):
-                        from modules.browser.cdp_session import CDPTab as _CDPTab
-                        if isinstance(tab, _CDPTab):
-                            pass
-                        else:
-                            tabs = self._session.get_tabs()
-                            tab = tabs[0] if tabs else None
+            if new_tab:
+                self._session.new_tab(url)
+                time.sleep(1.5)
+                tabs = self._session.get_tabs()
+                tab = tabs[-1] if tabs else None
+            else:
+                tab = self._session.resolve_tab(fallback_first=True, launch_if_missing=False)
+                if not isinstance(tab, dict) or tab.get("ambiguous"):
+                    from modules.browser.cdp_session import CDPTab as _CDPTab
+                    if isinstance(tab, _CDPTab):
+                        pass
+                    else:
+                        tabs = self._session.get_tabs()
+                        tab = tabs[0] if tabs else None
 
-                if tab and not isinstance(tab, dict):
-                    nav = self._session.navigate_tab(tab, url)
-                    if nav["success"]:
-                        time.sleep(1.8)
-                        results = self._page.extract_search_results(tab, max_results=8)
-                        if results["success"]:
-                            data = results.get("data") or {}
-                            data["query"] = query
-                            data["engine"] = engine
-                            count = data.get("count", 0)
-                            return self._ok(
-                                f"Recherche '{query}' : {count} résultat(s). "
-                                f"Dis 'ouvre le premier' pour continuer.",
-                                data,
-                            )
+            if tab and not isinstance(tab, dict):
+                nav = self._session.navigate_tab(tab, url)
+                if nav["success"]:
+                    time.sleep(1.8)
+                    results = self._page.extract_search_results(tab, max_results=8)
+                    if results["success"]:
+                        data = results.get("data") or {}
+                        data["query"] = query
+                        data["engine"] = engine
+                        count = data.get("count", 0)
+                        return self._ok(
+                            f"Recherche '{query}' : {count} résultat(s). "
+                            f"Dis 'ouvre le premier' pour continuer.",
+                            data,
+                        )
                         return self._ok(
                             f"Recherche '{query}' lancée sur {engine.title()}.",
                             {"query": query, "engine": engine, "url": url},

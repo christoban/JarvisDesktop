@@ -36,6 +36,7 @@ class IntentExecutor:
         self._bc = None   # BrowserControl
         self._au = None   # AudioManager
         self._nm = None   # NetworkManager
+        self._dr = None   # DocReader
         self._history = None
         self._macros = None
         self._power = None
@@ -1104,7 +1105,7 @@ class IntentExecutor:
     @property
     def dr(self):
         """DocReader"""
-        if not hasattr(self, '_dr') or self._dr is None:
+        if self._dr is None:
             from modules.doc_reader import DocReader
             self._dr = DocReader()
         return self._dr

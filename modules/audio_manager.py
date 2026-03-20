@@ -8,6 +8,13 @@ Backends audio (priorité décroissante) :
   Windows : pycaw (API Windows Core Audio) → commandes nircmd → PowerShell
   Linux   : pactl (PulseAudio) → amixer (ALSA)
   macOS   : osascript AppleScript
+
+CORRECTIONS SEMAINE 1 :
+  [B1] Suppression de la duplication de _adjust_volume_pycaw.
+       Seule la version avec cast + POINTER + IAudioEndpointVolume est conservée.
+  [B2] Correction de _get_volume_pycaw, _set_volume_pycaw, _toggle_mute_pycaw
+       pour utiliser la vraie API pycaw (cast + POINTER) au lieu de
+       device.EndpointVolume qui n'existe pas dans pycaw standard.
 """
 
 import os
@@ -48,12 +55,9 @@ def _has_pycaw() -> bool:
         return False
 
 def _has_pactl() -> bool:
-    # On vérifie directement si la commande est trouvable dans le PATH
-    # shutil.which retourne None si l'exécutable est introuvable
     return shutil.which("pactl") is not None
 
 def _has_amixer() -> bool:
-    # Même logique ici, plus besoin de subprocess.run(["which", ...])
     return shutil.which("amixer") is not None
 
 def _run(cmd: list, timeout: int = 5) -> tuple[bool, str]:
@@ -92,42 +96,22 @@ class AudioManager:
     # ══════════════════════════════════════════════════════════════════════════
 
     def volume_up(self, step: int = 10) -> dict:
-        """
-        Augmente le volume de `step` pourcents.
-
-        Args:
-            step : pourcentage à ajouter (défaut 10)
-        """
         step = max(1, min(step, 100))
         logger.info(f"Volume + {step}%")
         return self._adjust_volume(delta=+step)
 
     def volume_down(self, step: int = 10) -> dict:
-        """
-        Diminue le volume de `step` pourcents.
-
-        Args:
-            step : pourcentage à retirer (défaut 10)
-        """
         step = max(1, min(step, 100))
         logger.info(f"Volume - {step}%")
         return self._adjust_volume(delta=-step)
 
     def set_volume(self, level: int) -> dict:
-        """
-        Règle le volume à un niveau précis.
-
-        Args:
-            level : niveau en pourcentage (0–100)
-        """
         level = max(0, min(level, 100))
         logger.info(f"Volume → {level}%")
         return self._set_volume_absolute(level)
 
     def get_volume(self) -> dict:
-        """Retourne le niveau de volume actuel."""
         logger.info("Lecture volume actuel")
-
         if self._pycaw_available:
             return self._get_volume_pycaw()
         if self._pactl_available:
@@ -136,14 +120,11 @@ class AudioManager:
             return self._get_volume_amixer()
         if SYSTEM == "Darwin":
             return self._get_volume_macos()
-
         return self._ok("Volume actuel : inconnu (aucun backend disponible).",
                         {"level": -1, "backend": "none"})
 
     def mute(self) -> dict:
-        """Bascule le son (mute/unmute toggle)."""
         logger.info("Toggle mute")
-
         if self._pycaw_available:
             return self._toggle_mute_pycaw()
         if self._pactl_available:
@@ -154,7 +135,6 @@ class AudioManager:
             return self._toggle_mute_macos()
         if SYSTEM == "Windows":
             return self._toggle_mute_powershell()
-
         return self._err("Aucun backend audio disponible pour muter.")
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -164,15 +144,8 @@ class AudioManager:
     def play(self, query: str, music_dirs: list = None) -> dict:
         """
         Joue une musique locale en recherchant par nom/artiste.
-
-        Args:
-            query      : nom de la chanson, artiste ou fichier
-            music_dirs : dossiers où chercher (défaut: ~/Music, ~/Downloads)
-
-        Exemples :
-            play("shape of you")
-            play("Daft Punk")
-            play("C:/Music/playlist.mp3")
+        Ouvre avec l'application par défaut du système.
+        Pour un contrôle avancé (playlists, VLC), voir le module music/ (semaine 3).
         """
         query = query.strip()
         if not query:
@@ -192,11 +165,10 @@ class AudioManager:
         if not found:
             return self._err(
                 f"Aucun fichier musical trouvé pour '{query}'.\n"
-                f"  Dossiers scannés : {', '.join(str(d) for d in dirs if d.exists())}",
+                f"  Dossiers scannés : {', '.join(str(d) for d in dirs if Path(d).exists())}",
                 {"query": query, "searched_dirs": [str(d) for d in dirs]}
             )
 
-        # Jouer le premier résultat trouvé
         return self._play_file(found[0], all_results=found)
 
     def play_file(self, path: str) -> dict:
@@ -216,6 +188,7 @@ class AudioManager:
         dirs  = music_dirs or DEFAULT_MUSIC_DIRS
         files = []
         for d in dirs:
+            d = Path(d)
             if d.exists():
                 for ext in MUSIC_EXTENSIONS:
                     files.extend(d.glob(f"*{ext}"))
@@ -246,22 +219,18 @@ class AudioManager:
         )
 
     def pause(self) -> dict:
-        """Met en pause ou reprend la lecture (simule Espace via xdotool/pyautogui)."""
         logger.info("Pause/Resume")
         return self._send_media_key("pause")
 
     def next_track(self) -> dict:
-        """Passe au morceau suivant."""
         logger.info("Piste suivante")
         return self._send_media_key("next")
 
     def prev_track(self) -> dict:
-        """Revient au morceau précédent."""
         logger.info("Piste précédente")
         return self._send_media_key("prev")
 
     def stop(self) -> dict:
-        """Arrête la lecture."""
         logger.info("Stop")
         return self._send_media_key("stop")
 
@@ -270,6 +239,10 @@ class AudioManager:
     # ══════════════════════════════════════════════════════════════════════════
 
     def _adjust_volume_pycaw(self, delta: int) -> dict:
+        """
+        CORRECTION B1 : version unique avec la vraie API pycaw.
+        Suppression de la deuxième définition qui utilisait device.EndpointVolume.
+        """
         try:
             from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
             from ctypes import cast, POINTER
@@ -289,60 +262,52 @@ class AudioManager:
             return self._err(f"pycaw erreur : {str(e)}")
 
     def _get_volume_pycaw(self) -> dict:
+        """
+        CORRECTION B2 : utilise la vraie API pycaw avec cast + POINTER.
+        L'ancienne version utilisait device.EndpointVolume qui n'existe pas.
+        """
         try:
-            from pycaw.pycaw import AudioUtilities
-            
-            # 1. Récupération du périphérique
-            device = AudioUtilities.GetSpeakers()
-            
-            # 2. Accès direct via l'interface simplifiée
-            # On vérifie si l'attribut existe avant d'y accéder
-            if not hasattr(device, 'EndpointVolume'):
-                return self._err("Erreur : Le périphérique ne supporte pas l'interface simplifiée.")
-            
-            volume = device.EndpointVolume
-            
-            # 3. Récupération des données
-            level = int(round(volume.GetMasterVolumeLevelScalar() * 100))
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            level = round(volume.GetMasterVolumeLevelScalar() * 100)
             muted = bool(volume.GetMute())
-            
             return self._ok(f"Volume : {level}%", {"level": level, "muted": muted, "backend": "pycaw"})
-            
         except Exception as e:
-            return self._err(f"Erreur accès volume : {str(e)}")
+            return self._err(f"pycaw get_volume erreur : {str(e)}")
 
     def _set_volume_pycaw(self, level: int) -> dict:
+        """
+        CORRECTION B2 : utilise la vraie API pycaw avec cast + POINTER.
+        """
         try:
-            from pycaw.pycaw import AudioUtilities
-            
-            # 1. Normalisation
-            val = max(0, min(100, level)) / 100.0
-            
-            # 2. Récupération du périphérique
-            device = AudioUtilities.GetSpeakers()
-            
-            if not hasattr(device, 'EndpointVolume'):
-                return self._err("Erreur : Le périphérique ne supporte pas le contrôle simplifié.")
-            
-            # 3. Application directe
-            device.EndpointVolume.SetMasterVolumeLevelScalar(val, None)
-            
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume.SetMasterVolumeLevelScalar(level / 100.0, None)
             return self._ok(f"Volume réglé à {level}%.", {"level": level, "backend": "pycaw"})
         except Exception as e:
-            return self._err(f"Erreur set_volume : {str(e)}")
-        
+            return self._err(f"pycaw set_volume erreur : {str(e)}")
+
     def _toggle_mute_pycaw(self) -> dict:
+        """
+        CORRECTION B2 : utilise la vraie API pycaw avec cast + POINTER.
+        """
         try:
-            from pycaw.pycaw import AudioUtilities
-
-            device = AudioUtilities.GetSpeakers()
-            if not hasattr(device, 'EndpointVolume'):
-                return self._err("Le périphérique ne supporte pas l'interface simplifiée.")
-
-            volume = device.EndpointVolume
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
             is_muted = bool(volume.GetMute())
             volume.SetMute(not is_muted, None)
-
             new_state = "coupé" if not is_muted else "rétabli"
             return self._ok(f"Son {new_state}.", {"muted": not is_muted, "backend": "pycaw"})
         except Exception as e:
@@ -352,27 +317,42 @@ class AudioManager:
     #  BACKENDS VOLUME — Windows PowerShell (fallback)
     # ══════════════════════════════════════════════════════════════════════════
 
-    def _adjust_volume_pycaw(self, delta: int) -> dict:
-        try:
-            from pycaw.pycaw import AudioUtilities
+    def _adjust_volume_powershell(self, delta: int) -> dict:
+        """Ajuste le volume via PowerShell (fallback si pycaw absent)."""
+        # Lire le volume actuel
+        get_script = (
+            "$obj = New-Object -ComObject WScript.Shell; "
+            "Add-Type -TypeDefinition '"
+            "using System.Runtime.InteropServices; "
+            "public class Audio { "
+            "[DllImport(\"winmm.dll\")] public static extern int waveOutGetVolume(IntPtr h, out uint vol); "
+            "}';"
+            "$vol = 0; [Audio]::waveOutGetVolume([IntPtr]::Zero, [ref]$vol); "
+            "$left = ($vol -band 0xFFFF) / 0xFFFF * 100; [int]$left"
+        )
+        ok_get, stdout = _run(["powershell", "-Command", get_script])
+        current = int(stdout.strip()) if ok_get and stdout.strip().isdigit() else 50
+        new_level = max(0, min(100, current + delta))
 
-            device = AudioUtilities.GetSpeakers()
-
-            if not hasattr(device, 'EndpointVolume'):
-                return self._err("Le périphérique ne supporte pas l'interface simplifiée.")
-
-            volume = device.EndpointVolume
-            current = round(volume.GetMasterVolumeLevelScalar() * 100)
-            new_level = max(0, min(100, current + delta))
-            volume.SetMasterVolumeLevelScalar(new_level / 100, None)
-
+        set_script = (
+            f"$wsh = New-Object -ComObject WScript.Shell; "
+            f"$vol = [int]({new_level} * 655.35); "
+            f"$combined = ($vol -bor ($vol -shl 16)); "
+            f"Add-Type -TypeDefinition '"
+            f"using System.Runtime.InteropServices; "
+            f"public class Audio2 {{ "
+            f"[DllImport(\"winmm.dll\")] public static extern int waveOutSetVolume(IntPtr h, uint v); "
+            f"}}';"
+            f"[Audio2]::waveOutSetVolume([IntPtr]::Zero, $combined)"
+        )
+        ok, _ = _run(["powershell", "-Command", set_script])
+        if ok:
             action = "augmenté" if delta > 0 else "diminué"
             return self._ok(
                 f"Volume {action} : {current}% → {new_level}%",
-                {"old": current, "new": new_level, "delta": delta, "backend": "pycaw"}
+                {"old": current, "new": new_level, "backend": "powershell"}
             )
-        except Exception as e:
-            return self._err(f"pycaw erreur : {str(e)}")
+        return self._err("Impossible d'ajuster le volume via PowerShell.")
 
     def _toggle_mute_powershell(self) -> dict:
         """Toggle mute via PowerShell SendKeys."""
@@ -482,7 +462,7 @@ class AudioManager:
         return self._ok(f"Son {state}.", {"muted": new_muted, "backend": "osascript"})
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  DISPATCHER VOLUME (choisit le bon backend)
+    #  DISPATCHER VOLUME
     # ══════════════════════════════════════════════════════════════════════════
 
     def _adjust_volume(self, delta: int) -> dict:
@@ -508,7 +488,7 @@ class AudioManager:
             return self._set_volume_pactl(level)
         if self._amixer_available:
             ok, _ = _run(["amixer", "-q", "sset", "Master", f"{level}%"])
-            return self._ok(f"Volume → {level}%.", {"level": level, "backend": "amixer"}) if ok else self._err("Erreur amixer")        
+            return self._ok(f"Volume → {level}%.", {"level": level, "backend": "amixer"}) if ok else self._err("Erreur amixer")
         if SYSTEM == "Darwin":
             ok, _ = _run(["osascript", "-e", f"set volume output volume {level}"])
             return self._ok(f"Volume → {level}%.", {"level": level, "backend": "osascript"}) if ok else self._err("Erreur osascript")
@@ -547,7 +527,7 @@ class AudioManager:
 
     def _play_file(self, path: str, all_results: list = None) -> dict:
         """Lance la lecture d'un fichier audio avec l'application par défaut."""
-        import platform as _plat, os
+        import platform as _plat
         system = _plat.system()
         try:
             if system == "Windows":

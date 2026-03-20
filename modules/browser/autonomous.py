@@ -11,10 +11,15 @@ Responsabilités :
     → navigue + trouve + ouvre
   - Gestion du contexte navigateur : "est-ce qu'on est sur Google ?"
   - Séquences d'actions avec rapport d'étapes
+
+CORRECTIONS SEMAINE 1 :
+  [B5] multi_step_task ne crée plus un nouveau BrowserControl à chaque étape.
+       Utilise _dispatch_step() qui réutilise la session CDP courante.
 """
 
 from __future__ import annotations
 
+import re
 import time
 import urllib.parse
 from typing import Any
@@ -92,15 +97,10 @@ class AutonomousBrowser:
         """
         Navigue vers un site connu ou une URL.
         Si `query` est fourni, lance une recherche sur ce site.
-
-        Exemples :
-          go_to_site("youtube", "Python tutorial")
-          go_to_site("gmail")
-          go_to_site("github", "jarvis windows agent")
         """
         site_lower = site.strip().lower()
 
-        # Chercher la recherche directe par site d'abord
+        # Recherche directe par site d'abord
         if query and site_lower in SITE_SEARCH_URLS:
             url = SITE_SEARCH_URLS[site_lower].format(urllib.parse.quote_plus(query))
             tab = self._get_active_tab(launch=True)
@@ -131,7 +131,6 @@ class AutonomousBrowser:
 
         msg = f"Navigation vers {site.title()}."
         if query:
-            # Tenter de remplir la barre de recherche du site
             search_result = self.page.smart_type(tab, query, submit=True)
             if search_result["success"]:
                 msg = f"Navigation vers {site.title()} et recherche '{query}' lancée."
@@ -140,13 +139,7 @@ class AutonomousBrowser:
 
     def smart_search_and_open(self, query: str, engine: str = "google") -> dict:
         """
-        Recherche intelligente :
-        1. Lance la recherche
-        2. Attend le chargement
-        3. Extrait les résultats
-        4. Propose d'ouvrir le meilleur
-
-        Retourne les résultats + un message conversationnel.
+        Recherche intelligente : lance + attend + extrait les résultats.
         """
         search_url = SITE_SEARCH_URLS.get(engine.lower(), SITE_SEARCH_URLS["google"])
         url = search_url.format(urllib.parse.quote_plus(query))
@@ -159,7 +152,7 @@ class AutonomousBrowser:
         if not nav["success"]:
             return nav
 
-        time.sleep(1.8)  # attendre le chargement
+        time.sleep(1.8)
         self._update_context(tab)
 
         extracted = self.page.extract_search_results(tab, max_results=8)
@@ -181,15 +174,9 @@ class AutonomousBrowser:
         )
 
     def find_best_result_and_open(self, query: str) -> dict:
-        """
-        Niveau 8 : Trouve le meilleur résultat et l'ouvre automatiquement.
-        1. Recherche
-        2. Analyse les titres avec Groq
-        3. Ouvre le meilleur
-        """
+        """Niveau 8 : Trouve le meilleur résultat et l'ouvre automatiquement."""
         steps = []
 
-        # Étape 1 : rechercher
         search = self.smart_search_and_open(query)
         steps.append({"step": 1, "action": f"Recherche '{query}'", "success": search["success"]})
         if not search["success"]:
@@ -197,15 +184,11 @@ class AutonomousBrowser:
 
         results = (search.get("data") or {}).get("results") or []
         if not results:
-            return self._with_steps(
-                self._err("Aucun résultat trouvé."), steps
-            )
+            return self._with_steps(self._err("Aucun résultat trouvé."), steps)
 
-        # Étape 2 : choisir le meilleur
         best_rank = self._pick_best_result(query, results)
         steps.append({"step": 2, "action": f"Sélection résultat #{best_rank}", "success": True})
 
-        # Étape 3 : ouvrir
         best = self.page.open_search_result(best_rank)
         url = best.get("data", {}).get("url") or results[best_rank - 1].get("url", "")
 
@@ -228,17 +211,16 @@ class AutonomousBrowser:
     def multi_step_task(self, steps_description: list[str]) -> dict:
         """
         Exécute une séquence de commandes navigateur en ordre.
-        Chaque élément de `steps_description` est une instruction naturelle.
-        Utilisé par les macros navigateur.
+
+        CORRECTION B5 : utilise _dispatch_step() qui réutilise la session CDP
+        courante (self.session, self.page) au lieu de créer un nouveau
+        BrowserControl à chaque étape — ce qui cassait le contexte entre les étapes.
         """
         results = []
         for i, step in enumerate(steps_description):
             logger.info(f"Multi-step navigateur {i+1}/{len(steps_description)}: {step}")
-            # Import ici pour éviter import circulaire
-            from modules.browser.browser_control import BrowserControl
-            bc = BrowserControl()
-            # Exécution simplifiée — chaque step est une commande dispatch
-            result = bc.dispatch(step)
+            # ✅ Utiliser la session courante, pas un nouveau BrowserControl
+            result = self._dispatch_step(step)
             results.append({
                 "step": i + 1,
                 "instruction": step,
@@ -246,6 +228,7 @@ class AutonomousBrowser:
                 "message": result.get("message", ""),
             })
             if not result["success"]:
+                logger.warning(f"Étape {i+1} échouée : {result.get('message', '')} — arrêt de la séquence.")
                 break
             time.sleep(0.8)
 
@@ -255,13 +238,131 @@ class AutonomousBrowser:
             {"steps": results, "ok": ok_count, "total": len(results)},
         )
 
+    def _dispatch_step(self, natural_command: str) -> dict:
+        """
+        Dispatch une commande de séquence en utilisant la session CDP courante.
+        Remplace l'ancien BrowserControl().dispatch() qui créait une nouvelle instance.
+
+        CORRECTION B5 : réutilise self.session et self.page au lieu de créer
+        un nouveau BrowserControl à chaque appel.
+        """
+        cmd = natural_command.strip().lower()
+
+        # Recherche web
+        if any(k in cmd for k in ["cherche", "recherche", "google"]):
+            query = re.sub(r"^(cherche|recherche|google)\s+", "", cmd).strip()
+            search_url = SITE_SEARCH_URLS.get("google", "https://www.google.com/search?q={}").format(
+                urllib.parse.quote_plus(query)
+            )
+            tab = self._get_active_tab(launch=True)
+            if isinstance(tab, dict):
+                return tab
+            nav = self.session.navigate_tab(tab, search_url)
+            if nav["success"]:
+                time.sleep(1.8)
+                extracted = self.page.extract_search_results(tab, max_results=8)
+                if extracted["success"]:
+                    data = extracted.get("data") or {}
+                    data["query"] = query
+                    return self._ok(f"Recherche '{query}' : {data.get('count', 0)} résultat(s).", data)
+                return self._ok(f"Recherche '{query}' lancée.", {"query": query})
+            return nav
+
+        # Résumé de page
+        if "résume" in cmd or "resume" in cmd or "résumé" in cmd:
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.page.summarize_page_ai(tab)
+
+        # Lire la page
+        if "lis la page" in cmd or "lire la page" in cmd:
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.page.read_page(tab)
+
+        # Remonter en haut
+        if "remonte" in cmd or "haut de la page" in cmd:
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.page.scroll(tab, "top")
+
+        # Bas de page
+        if "bas de la page" in cmd:
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.page.scroll(tab, "bottom")
+
+        # Scroll
+        if "scrolle" in cmd or "scroll" in cmd:
+            direction = "up" if "haut" in cmd else "down"
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.page.scroll(tab, direction)
+
+        # Nouvel onglet
+        if "nouvel onglet" in cmd or "new tab" in cmd:
+            return self.session.new_tab()
+
+        # Fermer onglet
+        if "ferme" in cmd and "onglet" in cmd:
+            tabs = self.session.get_tabs()
+            if not tabs:
+                return self._err("Aucun onglet à fermer.")
+            return self.session.close_tab_by_id(tabs[0].id)
+
+        # Recharger
+        if "recharge" in cmd or "actualise" in cmd:
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.session.reload_tab(tab)
+
+        # Retour
+        if "retour" in cmd or "page précédente" in cmd:
+            tab = self._get_active_tab(launch=False)
+            if isinstance(tab, dict):
+                return tab
+            return self.session.history_nav(tab, "back")
+
+        # Ouvrir résultat numéroté
+        rank_match = re.search(r"ouvre\s+le\s+(premier|deuxième|troisième|\d+)", cmd)
+        if rank_match:
+            rank_str = rank_match.group(1)
+            rank_map = {"premier": 1, "deuxième": 2, "troisième": 3}
+            rank = rank_map.get(rank_str) or int(rank_str) if rank_str.isdigit() else 1
+            result = self.page.open_search_result(rank)
+            if result["success"]:
+                url = (result.get("data") or {}).get("url", "")
+                if url:
+                    tab = self._get_active_tab(launch=False)
+                    if not isinstance(tab, dict):
+                        return self.session.navigate_tab(tab, url)
+            return result
+
+        # Navigation URL directe
+        url = normalize_url(natural_command.strip())
+        if url.startswith("http"):
+            tab = self._get_active_tab(launch=True)
+            if isinstance(tab, dict):
+                return tab
+            return self.session.navigate_tab(tab, url)
+
+        # Navigation vers site connu
+        for site_key in SITE_MAP:
+            if site_key in cmd:
+                return self.go_to_site(site_key)
+
+        return self._err(f"Commande navigateur non reconnue dans la séquence: '{natural_command}'")
+
     # ── Contexte navigateur ───────────────────────────────────────────────────
 
     def get_browser_context(self) -> dict:
-        """
-        Retourne l'état actuel du navigateur :
-        site actif, titre, URL, nombre d'onglets.
-        """
+        """Retourne l'état actuel du navigateur."""
         ready = self.session.ensure_session(launch_if_missing=False)
         if not ready["success"]:
             return self._ok(
@@ -340,7 +441,7 @@ class AutonomousBrowser:
                 return max(1, min(rank, len(results)))
             except Exception:
                 pass
-        return 1  # fallback : premier résultat
+        return 1
 
     @staticmethod
     def _extract_site_name(url: str) -> str:
