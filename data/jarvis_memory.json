@@ -2,7 +2,7 @@
   "last_session": "2026-03-19 20:48",
   "preferences": {
     "folder_counts": {
-      "E:\\films": 4
+      "E:\\films": 5
     },
     "favorite_folders": [
       "E:\\films"
@@ -11,6 +11,14 @@
   "facts": {},
   "events": {
     "folder": [
+      {
+        "path": "E:\\films",
+        "name": "films",
+        "is_dir": true,
+        "parent": "E:\\",
+        "timestamp": 1773950291,
+        "datetime": "2026-03-19 20:58"
+      },
       {
         "path": "E:\\films",
         "name": "films",
@@ -50,15 +58,41 @@
         "name": "GODZILLA XKONG.mp4",
         "is_dir": false,
         "parent": "E:\\films",
+        "timestamp": 1773950385,
+        "datetime": "2026-03-19 20:59"
+      },
+      {
+        "path": "E:\\films\\GODZILLA XKONG.mp4",
+        "name": "GODZILLA XKONG.mp4",
+        "is_dir": false,
+        "parent": "E:\\films",
         "timestamp": 1773942859,
         "datetime": "2026-03-19 18:54"
+      }
+    ],
+    "audio": [
+      {
+        "intent": "AUDIO_VOLUME_DOWN",
+        "volume": null,
+        "track": "",
+        "action": "volume_down",
+        "timestamp": 1773950489,
+        "datetime": "2026-03-19 21:01"
+      },
+      {
+        "intent": "AUDIO_VOLUME_UP",
+        "volume": null,
+        "track": "",
+        "action": "volume_up",
+        "timestamp": 1773950437,
+        "datetime": "2026-03-19 21:00"
       }
     ]
   },
   "stats": {
     "session_count": 31,
-    "total_commands": 5
+    "total_commands": 9
   },
   "session_count": 31,
-  "_saved_at": "2026-03-19 20:48:28"
+  "_saved_at": "2026-03-19 21:01:29"
 }
