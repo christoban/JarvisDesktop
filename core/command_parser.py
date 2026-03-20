@@ -154,6 +154,20 @@ INTENTS = {
     "AUDIO_MUTE":        {"desc": "Couper/rétablir le son", "params": {}},
     "AUDIO_PLAY":        {"desc": "Jouer une musique ou un son", "params": {"query": "str, titre ou artiste"}},
 
+    # ── Musique (Semaine 3) ─────────────────────────────────────────────────
+    "MUSIC_PLAY":        {"desc": "Lancer une musique, playlist, album ou artiste", "params": {"query": "str, titre/artiste/playlist"}},
+    "MUSIC_PAUSE":       {"desc": "Mettre en pause la musique en cours", "params": {}},
+    "MUSIC_RESUME":      {"desc": "Reprendre la lecture musicale", "params": {}},
+    "MUSIC_STOP":        {"desc": "Arrêter la lecture musicale", "params": {}},
+    "MUSIC_NEXT":        {"desc": "Passer à la piste suivante", "params": {}},
+    "MUSIC_PREVIOUS":    {"desc": "Revenir à la piste précédente", "params": {}},
+    "MUSIC_VOLUME_UP":   {"desc": "Augmenter le volume du module musique", "params": {"step": "int optionnel"}},
+    "MUSIC_VOLUME_DOWN": {"desc": "Diminuer le volume du module musique", "params": {"step": "int optionnel"}},
+    "MUSIC_VOLUME_SET":  {"desc": "Régler le volume du module musique", "params": {"level": "int, 0-100"}},
+    "MUSIC_STATUS":      {"desc": "Afficher l'état du lecteur musique", "params": {}},
+    "MUSIC_QUEUE_ADD":   {"desc": "Ajouter un morceau à la file d'attente", "params": {"query": "str"}},
+    "MUSIC_QUEUE_SHOW":  {"desc": "Afficher la file d'attente musicale", "params": {}},
+
     # ── Documents ─────────────────────────────────────────────────────────────
     "DOC_READ":        {"desc": "Lire un document Word ou PDF", "params": {"path": "str"}},
     "DOC_SUMMARIZE":   {"desc": "Résumer un document",          "params": {"path": "str"}},

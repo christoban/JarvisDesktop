@@ -174,6 +174,7 @@ class Agent:
     def __init__(self):
         self.running = False
         self.context = ConversationContext()
+        self._dr = None
 
         # Pré-chargement immédiat — évite les délais à la première commande
         logger.info("Pré-chargement des modules Jarvis...")
@@ -409,7 +410,6 @@ class Agent:
         choices      = pending.get("choices", [])
         original_cmd = pending.get("raw_command", "")
         r = reply.lower().strip()
-        import re
 
         if intent == "__CLARIFY_INTENT__":
             clarified = self._resolve_intent_clarification(reply, pending.get("choices", []), original_cmd)
@@ -517,7 +517,6 @@ class Agent:
             return None
 
         selected = None
-        import re
         num_match = re.search(r"\b(\d+)\b", r)
         if num_match:
             idx = int(num_match.group(1)) - 1
@@ -1315,8 +1314,6 @@ class Agent:
 
     @staticmethod
     def _extract_close_candidate(lower: str, params: dict) -> str:
-        import re
-
         param_candidate = str(
             params.get("target")
             or params.get("query")
@@ -1354,8 +1351,6 @@ class Agent:
 
     @staticmethod
     def _extract_tab_or_page_target(lower: str) -> str:
-        import re
-
         mention_match = re.search(
             r"(?:onglet|tab|page)\s+(?:de\s+chrome\s+)?(?:qui\s+(?:est|n\'?est)?\s*)?sur\s+([a-z0-9\s\-_'’\.]+)$",
             lower,
@@ -1496,8 +1491,6 @@ class Agent:
 
     @staticmethod
     def _is_explicit_file_request(lower: str) -> bool:
-        import re
-
         file_hints = [
             "fichier", "fichiers", "dossier", "dossiers", "document", "documents",
             "repertoire", "répertoire", "dans mes", "sur le disque", "dans le disque",

@@ -30,7 +30,7 @@ import tempfile
 import threading
 import time
 import uuid
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -195,6 +195,8 @@ except Exception as _security_import_error:
     print(f"⚠  Import security : {_security_import_error} — mode dev sans securite avancee")
 
 MAX_NOTIFICATIONS = 200
+RESULT_TTL_SECONDS = int(os.getenv("JARVIS_RESULT_TTL_SECONDS", "1800"))
+MAX_STORED_RESULTS = int(os.getenv("JARVIS_MAX_STORED_RESULTS", "1000"))
 BATTERY_CHECK_INTERVAL_SEC = 300
 BATTERY_LOW_THRESHOLD = int(os.getenv("JARVIS_BATTERY_NOTIFY_THRESHOLD", "20"))
 NOTIFY_ON_SUCCESS = os.getenv("JARVIS_NOTIFY_ON_SUCCESS", "1").lower() not in {"0", "false", "no"}
@@ -301,6 +303,42 @@ def _drain_notifications(limit: int = 50) -> list:
 def _queued_notifications_count() -> int:
     with _notifications_lock:
         return len(_notifications)
+
+
+def _prune_results_locked(now: int | None = None):
+    """Prune expired/old command results while holding _store_lock."""
+    if now is None:
+        now = int(time.time())
+
+    if RESULT_TTL_SECONDS > 0:
+        expired = [
+            key for key, entry in _results.items()
+            if now - int((entry or {}).get("executed_at", now)) > RESULT_TTL_SECONDS
+        ]
+        for key in expired:
+            _results.pop(key, None)
+
+    if MAX_STORED_RESULTS > 0 and len(_results) > MAX_STORED_RESULTS:
+        ordered = sorted(
+            _results.items(),
+            key=lambda kv: int((kv[1] or {}).get("executed_at", 0)),
+        )
+        to_remove = len(_results) - MAX_STORED_RESULTS
+        for key, _ in ordered[:to_remove]:
+            _results.pop(key, None)
+
+
+def _store_result(cmd_id: str, result: dict, duration_ms: int | None = None):
+    payload = {
+        "result": result,
+        "executed_at": int(time.time()),
+    }
+    if duration_ms is not None:
+        payload["duration_ms"] = duration_ms
+
+    with _store_lock:
+        _prune_results_locked()
+        _results[cmd_id] = payload
 
 
 def _start_battery_monitor_once():
@@ -451,12 +489,7 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
                             "device_level": level,
                         },
                     }
-                    with _store_lock:
-                        _results[cmd_id] = {
-                            "result": denied_result,
-                            "executed_at": int(time.time()),
-                            "duration_ms": int((time.time() - start) * 1000),
-                        }
+                    _store_result(cmd_id, denied_result, int((time.time() - start) * 1000))
                     _notify_clients(_notification_payload(
                         "Permission refusee",
                         f"{command} — niveau insuffisant.",
@@ -468,16 +501,15 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
 
                 if perms.requires_confirmation(intent):
                     confirm_req = perms.create_confirmation(intent, parsed.get("params", {}) or {}, command)
-                    with _store_lock:
-                        _results[cmd_id] = {
-                            "result": {
-                                "success": False,
-                                "awaiting_confirm": True,
-                                "confirm_id": confirm_req.id,
-                                "message": confirm_req.to_dict().get("message", "Confirmation requise"),
-                            },
-                            "executed_at": int(time.time()),
-                        }
+                    _store_result(
+                        cmd_id,
+                        {
+                            "success": False,
+                            "awaiting_confirm": True,
+                            "confirm_id": confirm_req.id,
+                            "message": confirm_req.to_dict().get("message", "Confirmation requise"),
+                        },
+                    )
 
                     _notify_clients(_notification_payload(
                         "Confirmation requise",
@@ -489,17 +521,16 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
 
                     confirmed = confirm_req.wait(30)
                     if not confirmed:
-                        with _store_lock:
-                            _results[cmd_id] = {
-                                "result": {
-                                    "success": False,
-                                    "message": "Action annulee",
-                                    "awaiting_confirm": False,
-                                    "confirm_id": confirm_req.id,
-                                },
-                                "executed_at": int(time.time()),
-                                "duration_ms": int((time.time() - start) * 1000),
-                            }
+                        _store_result(
+                            cmd_id,
+                            {
+                                "success": False,
+                                "message": "Action annulee",
+                                "awaiting_confirm": False,
+                                "confirm_id": confirm_req.id,
+                            },
+                            int((time.time() - start) * 1000),
+                        )
                         return
 
         result  = agent.handle_command(command)
@@ -525,12 +556,7 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
             if tts:
                 tts.speak_result(result, command)
 
-        with _store_lock:
-            _results[cmd_id] = {
-                "result":      result,
-                "executed_at": int(time.time()),
-                "duration_ms": elapsed,
-            }
+        _store_result(cmd_id, result, elapsed)
 
         if success:
             if NOTIFY_ON_SUCCESS and not speak:
@@ -558,11 +584,7 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
 
     except Exception as e:
         print(f"  ❌ Erreur agent : {e}")
-        with _store_lock:
-            _results[cmd_id] = {
-                "result":      {"success": False, "message": str(e)},
-                "executed_at": int(time.time()),
-            }
+        _store_result(cmd_id, {"success": False, "message": str(e)})
         _notify_clients(_notification_payload(
             "Erreur critique Jarvis",
             str(e),
@@ -697,6 +719,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 return self._json({"error": "Unauthorized", "reason": auth_result.get("reason", "Unauthorized")}, 401)
             cmd_id = path.split("/api/result/")[-1]
             with _store_lock:
+                _prune_results_locked()
                 entry = _results.get(cmd_id)
             if entry is None:
                 return self._json({"status": "pending", "command_id": cmd_id}, 404)
@@ -865,12 +888,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     tts.speak_result(result, transcript)
 
             # Stocker pour polling éventuel
-            with _store_lock:
-                _results[cmd_id] = {
-                    "result":      result,
-                    "executed_at": int(time.time()),
-                    "duration_ms": t_whisper + t_exec,
-                }
+            _store_result(cmd_id, result, t_whisper + t_exec)
 
             return self._json({
                 "success":     success,
@@ -951,7 +969,7 @@ if __name__ == "__main__":
 
     _start_battery_monitor_once()
 
-    server = HTTPServer(("0.0.0.0", PORT), BridgeHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), BridgeHandler)
     print("  ✅ Bridge actif — Ctrl+C pour arrêter\n")
     try:
         server.serve_forever()
