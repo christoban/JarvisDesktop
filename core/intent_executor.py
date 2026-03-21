@@ -175,6 +175,7 @@ class IntentExecutor:
 
             "GREETING": self._greeting,
             "INCOMPLETE": self._incomplete,
+            "KNOWLEDGE_QA": self._knowledge_qa,
 
             # ── Aide / Inconnu ────────────────────────────────────────────────
             "HELP":    self._help,
@@ -211,9 +212,15 @@ class IntentExecutor:
 
         try:
             result = handler(params)
+            
+            # Détecter si l'utilisateur demande explicitement les détails/tableau
+            should_show_display = self._user_asked_for_details(raw_command)
+            if result and isinstance(result, dict):
+                result["_show_display"] = should_show_display
 
             # Robustesse: certains handlers legacy peuvent renvoyer autre chose qu'un dict.
             if isinstance(result, dict):
+                # Flag déjà ajouté plus haut si présent
                 return result
             if result is None:
                 return self._err(f"{intent}: aucun resultat renvoye.")
@@ -226,6 +233,14 @@ class IntentExecutor:
         except Exception as e:
             logger.error(f"Erreur exécution intent={intent} : {e}", exc_info=True)
             return self._err(f"Erreur lors de l'exécution de '{intent}' : {str(e)}")
+
+    def _user_asked_for_details(self, raw_command: str) -> bool:
+        """Detecte si user demande explicitement les details/tableau."""
+        if not raw_command:
+            return False
+        lower = raw_command.lower()
+        keywords = ["affiche", "tableau", "detail", "montre", "full", "complet", "exhaustif"]
+        return any(kw in lower for kw in keywords)
 
     # ══════════════════════════════════════════════════════════════════════════
     #  SYSTÈME
@@ -1252,6 +1267,10 @@ class IntentExecutor:
             "Je suis JARVIS — voici tout ce que je sais faire.",
             {"display": "\n".join(lines)},
         )
+
+    def _knowledge_qa(self, p):
+        # Cette intention est normalement geree directement par Agent, sans execution.
+        return self._ok("Reponse directe traitee.", {"mode": "knowledge_qa"})
 
     def _unknown(self, p):
         return self._err(

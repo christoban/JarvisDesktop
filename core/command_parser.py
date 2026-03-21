@@ -183,6 +183,7 @@ INTENTS = {
 
     "GREETING":    {"desc": "Salutation ou message d'accueil", "params": {}},
     "MEMORY_SHOW": {"desc": "Afficher ce dont Jarvis se souvient", "params": {}},
+    "KNOWLEDGE_QA": {"desc": "Question de connaissance générale, réponse directe sans action système", "params": {}},
 
     "INCOMPLETE": {
         "desc": "Commande incomplète — paramètre manquant",
@@ -215,6 +216,8 @@ FEW_SHOT_EXAMPLES = [
     ("mode nuit", '{"intent":"MACRO_RUN","params":{"name":"mode nuit"},"confidence":0.98,"response_message":"Je lance la macro mode nuit."}'),
     ("répète la dernière commande", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
     ("liste les réseaux wifi", '{"intent":"WIFI_LIST","params":{},"confidence":0.99,"response_message":"Je cherche les réseaux Wi-Fi disponibles."}'),
+    ("donne moi les infos sur mon système", '{"intent":"SYSTEM_INFO","params":{},"confidence":0.99,"response_message":"Je récupère les informations système."}'),
+    ("il me reste combien d'espace disque", '{"intent":"SYSTEM_DISK","params":{},"confidence":0.99,"response_message":"Je vérifie l\'espace disque disponible."}'),
 ]
 
 
@@ -301,6 +304,9 @@ class CommandParser:
                 except Exception as e:
                     logger.warning(f"Groq tentative {attempt + 1} échouée : {e}")
                     self._set_groq_cooldown_from_error(e)
+                    # Erreur structurelle de sortie JSON: inutile de retenter plusieurs fois.
+                    if "json_validate_failed" in str(e):
+                        break
                     if time.time() < self._groq_cooldown_until:
                         break
                     if attempt < retries:
@@ -327,6 +333,9 @@ class CommandParser:
                 except Exception as e:
                     logger.warning(f"Groq+ctx tentative {attempt + 1} échouée : {e}")
                     self._set_groq_cooldown_from_error(e)
+                    # Erreur structurelle de sortie JSON: inutile de retenter plusieurs fois.
+                    if "json_validate_failed" in str(e):
+                        break
                     if time.time() < self._groq_cooldown_until:
                         break
                     if attempt < retries:
@@ -354,16 +363,19 @@ class CommandParser:
 
         messages = [{"role": "system", "content": self._build_system_prompt(memory_summary)}]
 
-        for user_msg, assistant_msg in FEW_SHOT_EXAMPLES[:6]:
+        for user_msg, assistant_msg in FEW_SHOT_EXAMPLES[:8]:
             messages.append({"role": "user",      "content": user_msg})
             messages.append({"role": "assistant", "content": assistant_msg})
 
         if history_to_use:
-            for msg in history_to_use[-(12):]:
-                role    = msg.get("role", "user")
+            # Pour le parsing d'intent, on limite le bruit: prioriser les messages user.
+            # Les réponses assistant détaillées peuvent perturber la génération JSON stricte.
+            for msg in history_to_use[-12:]:
+                role = msg.get("role", "user")
                 content = str(msg.get("content", "")).strip()
-                if content and role in ("user", "assistant"):
-                    messages.append({"role": role, "content": content})
+                if not content or role != "user":
+                    continue
+                messages.append({"role": "user", "content": content})
 
         messages.append({"role": "user", "content": command})
 
@@ -416,6 +428,15 @@ RÈGLES :
 8. Salutations → GREETING. Questions capacités → HELP.
 9. Phrases multi-actions → retenir l'ACTION FINALE.
 10. Si vraiment incompréhensible → UNKNOWN.
+11. Si la requête est une question de connaissance générale (définition, explication, comparaison,
+    culture générale, raisonnement) et ne demande pas d'action sur le PC → KNOWLEDGE_QA.
+12. Pour KNOWLEDGE_QA, donne la réponse directement dans `response_message`.
+11. SORTIE STRICTE : retourne UNIQUEMENT un objet JSON avec EXACTEMENT ces clés
+    `intent`, `params`, `confidence`, `response_message`.
+12. INTERDIT de retourner des objets métier (`cpu`, `ram`, `disk`, `system_info`, etc.).
+13. `params` doit être un objet JSON ({{}} si vide), jamais du texte.
+14. `confidence` doit être un nombre entre 0 et 1.
+15. Si la demande concerne l'état/infos du système PC → `intent` = `SYSTEM_INFO`.
 
 FORMAT (JSON uniquement) :
 {{"intent": "NOM", "params": {{}}, "confidence": 0.95, "response_message": "Réponse naturelle."}}
@@ -484,6 +505,12 @@ FORMAT (JSON uniquement) :
             return {"intent": "POWER_STATE", "params": {}, "confidence": 0.85}
         if any(k in lower for k in ["infos systeme", "info systeme", "system info", "etat du pc", "etat pc", "infos pc"]):
             return {"intent": "SYSTEM_INFO", "params": {}, "confidence": 0.8}
+        # Variante plus naturelle: "donne moi les infos sur mon systeme"
+        if (
+            ("systeme" in lower or "pc" in lower or "ordinateur" in lower)
+            and any(k in lower for k in ["info", "infos", "etat", "spec", "specs", "configuration"])
+        ):
+            return {"intent": "SYSTEM_INFO", "params": {}, "confidence": 0.8}
         if any(k in lower for k in ["disque", "stockage", "disk info", "espace disque"]):
             return {"intent": "SYSTEM_DISK", "params": {}, "confidence": 0.8}
         if any(k in lower for k in ["processus", "process", "taches en cours"]):
@@ -525,7 +552,9 @@ FORMAT (JSON uniquement) :
             return {"intent": "MUSIC_PREV", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["mets en pause", "pause musique", "pause la musique", "stoppe la musique"]):
             return {"intent": "MUSIC_PAUSE", "params": {}, "confidence": 0.9}
-        if any(k in lower for k in ["reprends la musique", "reprends", "continue la musique", "resume"]):
+        if any(k in lower for k in ["reprends la musique", "reprends", "continue la musique"]):
+            return {"intent": "MUSIC_RESUME", "params": {}, "confidence": 0.85}
+        if "resume" in lower and any(k in lower for k in ["musique", "chanson", "piste"]):
             return {"intent": "MUSIC_RESUME", "params": {}, "confidence": 0.85}
         if any(k in lower for k in ["arrete la musique", "stop musique", "coupe la musique"]):
             return {"intent": "MUSIC_STOP", "params": {}, "confidence": 0.9}
@@ -583,11 +612,58 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["infos reseau", "info reseau", "network info", "ip locale", "mon ip"]):
             return {"intent": "NETWORK_INFO", "params": {}, "confidence": 0.85}
 
-        # ── Fichiers ──────────────────────────────────────────────────────────
+        # ── Navigateur — résumé et lecture ───────────────────────────────────────
+        if any(k in lower for k in ["resume cette page", "resume la page", "resumer la page",
+                                     "summarize", "faire un resume"]):
+            return {"intent": "BROWSER_SUMMARIZE", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["lis la page", "lire la page", "lire le contenu",
+                                     "lis le contenu", "affiche le texte"]):
+            return {"intent": "BROWSER_READ", "params": {}, "confidence": 0.9}
+ 
+        # ── Navigateur — onglets ──────────────────────────────────────────────────
+        if any(k in lower for k in ["liste les onglets", "onglets ouverts", "mes onglets",
+                                     "quels onglets", "affiche les onglets"]):
+            return {"intent": "BROWSER_LIST_TABS", "params": {}, "confidence": 0.95}
+        if any(k in lower for k in ["nouvel onglet", "ouvre un onglet", "new tab",
+                                     "ouvre un nouvel onglet"]):
+            return {"intent": "BROWSER_NEW_TAB", "params": {}, "confidence": 0.95}
+        if any(k in lower for k in ["ferme l onglet", "ferme cet onglet", "close tab",
+                                     "ferme l'onglet actif"]):
+            return {"intent": "BROWSER_CLOSE_TAB", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["recharge la page", "actualise la page", "refresh",
+                                     "recharger la page", "actualiser"]):
+            return {"intent": "BROWSER_RELOAD", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["page precedente", "retour navigateur", "go back",
+                                     "reviens en arriere", "retourne en arriere"]):
+            return {"intent": "BROWSER_BACK", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["page suivante", "go forward", "avance",
+                                     "aller a la page suivante"]):
+            return {"intent": "BROWSER_FORWARD", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["extrait les liens", "liste les liens", "liens de la page"]):
+            return {"intent": "BROWSER_EXTRACT_LINKS", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["ferme le navigateur", "ferme chrome", "ferme firefox",
+                                     "ferme edge", "ferme brave", "close browser"]):
+            return {"intent": "BROWSER_CLOSE", "params": {}, "confidence": 0.9}
+ 
+        # ── Navigateur — résultats de recherche ───────────────────────────────────
+        if any(k in lower for k in ["ouvre le resultat", "ouvre le premier", "ouvre le 1",
+                                     "ouvre le deuxieme", "ouvre le 2", "ouvre le 2e",
+                                     "ouvre le troisieme", "ouvre le 3"]):
+            rank = 1
+            if any(k in lower for k in ["deuxieme", "2e", "2eme", "second"]):
+                rank = 2
+            elif any(k in lower for k in ["troisieme", "3e", "3eme"]):
+                rank = 3
+            return {"intent": "BROWSER_OPEN_RESULT", "params": {"rank": rank}, "confidence": 0.9}
+
+        # ── Fichiers ou web — "cherche" distingue les deux contextes ─────────────
         if any(k in lower for k in ["cherche", "trouve", "search"]):
             query = self._extract_after(lower, ["cherche ", "trouve ", "search "])
-            if any(k in lower for k in ["sur le web", "google", "internet", "web"]):
-                return {"intent": "BROWSER_SEARCH", "params": {"query": query}, "confidence": 0.75}
+            # Si le contexte est clairement web → BROWSER_SEARCH
+            if any(k in lower for k in ["sur le web", "sur google", "google", "internet",
+                                         "en ligne", "sur bing", "sur duckduckgo", "tutorial", "tutoriel"]):
+                return {"intent": "BROWSER_SEARCH", "params": {"query": query}, "confidence": 0.85}
+            # Sinon → recherche de fichier
             return {"intent": "FILE_SEARCH", "params": {"query": query}, "confidence": 0.7}
 
         # ── Navigateur ────────────────────────────────────────────────────────
@@ -644,6 +720,16 @@ FORMAT (JSON uniquement) :
                                      "tu peux faire", "qui es-tu", "ton nom"]):
             return {"intent": "HELP", "params": {}, "confidence": 0.9}
 
+        # ── Questions de connaissance générale (sans action système) ────────
+        if (
+            any(k in lower for k in ["c'est quoi", "c’est quoi", "c est quoi", "cest quoi", "qu'est ce que", "qu’est ce que", "qu est ce que", "quest ce que", "explique", "pourquoi", "comment", "difference entre", "définition", "definition"])
+            and not any(k in lower for k in [
+                "ouvre", "lance", "ferme", "mets", "volume", "wifi", "bluetooth", "disque",
+                "systeme", "système", "processus", "reseau", "réseau", "fichier", "dossier", "capture"
+            ])
+        ):
+            return {"intent": "KNOWLEDGE_QA", "params": {}, "confidence": 0.75}
+
         return self._unknown(command, "Aucun mot-clé reconnu (Groq hors ligne).")
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -661,6 +747,27 @@ FORMAT (JSON uniquement) :
         normalized = self._normalize_text(lower)
         intent     = out.get("intent", "UNKNOWN")
         confidence = float(out.get("confidence", 0.0))
+
+        # Priorite absolue 1: requete memoire/conversationnelle ne doit pas annuler une extinction.
+        if any(k in normalized for k in ["tu te souviens", "souviens toi", "tu te rappelles", "rappelle toi"]) and intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}:
+            out["intent"] = "MEMORY_SHOW"
+            out["params"] = {}
+            out["confidence"] = max(confidence, 0.9)
+            return out
+
+        # Priorite absolue 2: negation explicite "ne ... annule pas" -> interdit d'annuler.
+        if intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}:
+            has_negated_cancel = (
+                "n'annule pas" in lower
+                or "ne l'annule pas" in lower
+                or "n annule pas" in normalized
+                or ("annule" in normalized and "pas" in normalized)
+            )
+            if has_negated_cancel:
+                out["intent"] = "UNKNOWN"
+                out["params"] = {}
+                out["confidence"] = max(confidence, 0.9)
+                return out
 
         # Si Groq est très confiant, respecter son choix
         if confidence >= 0.85:

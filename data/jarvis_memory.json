@@ -1,98 +1,386 @@
 {
-  "last_session": "2026-03-19 20:48",
+  "last_session": "2026-03-21 07:52",
   "preferences": {
+    "app_counts": {
+      "chrome": 5,
+      "bloc-notes": 2
+    },
+    "favorite_apps": [
+      "chrome",
+      "bloc-notes"
+    ],
     "folder_counts": {
-      "E:\\films": 5
+      "E:\\": 1,
+      "C:\\Users\\Public\\Desktop": 1
     },
     "favorite_folders": [
-      "E:\\films"
+      "E:\\",
+      "C:\\Users\\Public\\Desktop"
     ]
   },
-  "facts": {},
+  "facts": {
+    "favorite_app": {
+      "value": "chrome",
+      "learned": "2026-03-21 08:27"
+    },
+    "prenom": {
+      "value": "Christophe",
+      "learned": "2026-03-21 08:30"
+    }
+  },
   "events": {
+    "system": [
+      {
+        "intent": "SYSTEM_NETWORK",
+        "action": "system_network",
+        "delay_seconds": null,
+        "timestamp": 1774077807,
+        "datetime": "2026-03-21 08:23"
+      },
+      {
+        "intent": "SYSTEM_LOCK",
+        "action": "system_lock",
+        "delay_seconds": null,
+        "timestamp": 1774077620,
+        "datetime": "2026-03-21 08:20"
+      },
+      {
+        "intent": "SYSTEM_TASK_MANAGER",
+        "action": "system_task_manager",
+        "delay_seconds": null,
+        "timestamp": 1774076481,
+        "datetime": "2026-03-21 08:01"
+      },
+      {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "delay_seconds": null,
+        "timestamp": 1774076041,
+        "datetime": "2026-03-21 07:54"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774075998,
+        "datetime": "2026-03-21 07:53"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774075954,
+        "datetime": "2026-03-21 07:52"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774075930,
+        "datetime": "2026-03-21 07:52"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": null,
+        "timestamp": 1774071912,
+        "datetime": "2026-03-21 06:45"
+      },
+      {
+        "intent": "SYSTEM_CANCEL_SHUTDOWN",
+        "action": "system_cancel_shutdown",
+        "delay_seconds": null,
+        "timestamp": 1774069209,
+        "datetime": "2026-03-21 06:00"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "timestamp": 1774068724,
+        "datetime": "2026-03-21 05:52"
+      },
+      {
+        "intent": "SYSTEM_CANCEL_SHUTDOWN",
+        "action": "system_cancel_shutdown",
+        "timestamp": 1774068689,
+        "datetime": "2026-03-21 05:51"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "timestamp": 1774068665,
+        "datetime": "2026-03-21 05:51"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774068065,
+        "datetime": "2026-03-21 05:41"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774067998,
+        "datetime": "2026-03-21 05:39"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774067373,
+        "datetime": "2026-03-21 05:29"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774067294,
+        "datetime": "2026-03-21 05:28"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774066527,
+        "datetime": "2026-03-21 05:15"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774066426,
+        "datetime": "2026-03-21 05:13"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774066406,
+        "datetime": "2026-03-21 05:13"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065919,
+        "datetime": "2026-03-21 05:05"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065898,
+        "datetime": "2026-03-21 05:04"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065657,
+        "datetime": "2026-03-21 05:00"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065582,
+        "datetime": "2026-03-21 04:59"
+      },
+      {
+        "intent": "SYSTEM_LOCK",
+        "action": "system_lock",
+        "timestamp": 1774065076,
+        "datetime": "2026-03-21 04:51"
+      },
+      {
+        "intent": "SYSTEM_CANCEL_SHUTDOWN",
+        "action": "system_cancel_shutdown",
+        "timestamp": 1774065035,
+        "datetime": "2026-03-21 04:50"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "timestamp": 1774065014,
+        "datetime": "2026-03-21 04:50"
+      },
+      {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "timestamp": 1774064977,
+        "datetime": "2026-03-21 04:49"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064925,
+        "datetime": "2026-03-21 04:48"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064746,
+        "datetime": "2026-03-21 04:45"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064427,
+        "datetime": "2026-03-21 04:40"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064404,
+        "datetime": "2026-03-21 04:40"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064243,
+        "datetime": "2026-03-21 04:37"
+      }
+    ],
+    "app": [
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774078069,
+        "datetime": "2026-03-21 08:27"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774076790,
+        "datetime": "2026-03-21 08:06"
+      },
+      {
+        "name": "Bloc-notes",
+        "pid": 16220,
+        "args": [],
+        "timestamp": 1774076439,
+        "datetime": "2026-03-21 08:00"
+      },
+      {
+        "name": "chrome",
+        "pid": 3664,
+        "args": [],
+        "timestamp": 1774076394,
+        "datetime": "2026-03-21 07:59"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774073880,
+        "datetime": "2026-03-21 07:18"
+      },
+      {
+        "name": "Bloc-notes",
+        "pid": 8196,
+        "args": [],
+        "timestamp": 1774073841,
+        "datetime": "2026-03-21 07:17"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774073688,
+        "datetime": "2026-03-21 07:14"
+      }
+    ],
     "folder": [
       {
-        "path": "E:\\films",
-        "name": "films",
+        "path": "C:\\Users\\Public\\Desktop",
+        "name": "Desktop",
         "is_dir": true,
-        "parent": "E:\\",
-        "timestamp": 1773950291,
-        "datetime": "2026-03-19 20:58"
+        "parent": "C:\\Users\\Public",
+        "timestamp": 1774076664,
+        "datetime": "2026-03-21 08:04"
       },
       {
-        "path": "E:\\films",
-        "name": "films",
+        "path": "E:\\",
+        "name": "",
         "is_dir": true,
         "parent": "E:\\",
-        "timestamp": 1773942809,
-        "datetime": "2026-03-19 18:53"
-      },
-      {
-        "path": "E:\\films",
-        "name": "films",
-        "is_dir": true,
-        "parent": "E:\\",
-        "timestamp": 1773942771,
-        "datetime": "2026-03-19 18:52"
-      },
-      {
-        "path": "E:\\films",
-        "name": "films",
-        "is_dir": true,
-        "parent": "E:\\",
-        "timestamp": 1773942585,
-        "datetime": "2026-03-19 18:49"
-      },
-      {
-        "path": "E:\\films",
-        "name": "films",
-        "is_dir": true,
-        "parent": "E:\\",
-        "timestamp": 1773877596,
-        "datetime": "2026-03-19 00:46"
+        "timestamp": 1774074151,
+        "datetime": "2026-03-21 07:22"
       }
     ],
-    "file": [
+    "browser": [
       {
-        "path": "E:\\films\\GODZILLA XKONG.mp4",
-        "name": "GODZILLA XKONG.mp4",
-        "is_dir": false,
-        "parent": "E:\\films",
-        "timestamp": 1773950385,
-        "datetime": "2026-03-19 20:59"
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.google.com/search?q=python",
+        "query": "python",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774078156,
+        "datetime": "2026-03-21 08:29"
       },
       {
-        "path": "E:\\films\\GODZILLA XKONG.mp4",
-        "name": "GODZILLA XKONG.mp4",
-        "is_dir": false,
-        "parent": "E:\\films",
-        "timestamp": 1773942859,
-        "datetime": "2026-03-19 18:54"
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.youtube.com/results?search_query=lofi+music",
+        "query": "lofi music",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774077100,
+        "datetime": "2026-03-21 08:11"
+      },
+      {
+        "intent": "BROWSER_LIST_TABS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774076967,
+        "datetime": "2026-03-21 08:09"
       }
     ],
-    "audio": [
+    "macro": [
       {
-        "intent": "AUDIO_VOLUME_DOWN",
-        "volume": null,
-        "track": "",
-        "action": "volume_down",
-        "timestamp": 1773950489,
-        "datetime": "2026-03-19 21:01"
+        "name": "",
+        "action": "list",
+        "steps": null,
+        "timestamp": 1774077499,
+        "datetime": "2026-03-21 08:18"
+      }
+    ],
+    "network": [
+      {
+        "intent": "BLUETOOTH_DISABLE",
+        "ssid": "",
+        "action": "bluetooth_disable",
+        "timestamp": 1774077894,
+        "datetime": "2026-03-21 08:24"
       },
       {
-        "intent": "AUDIO_VOLUME_UP",
-        "volume": null,
-        "track": "",
-        "action": "volume_up",
-        "timestamp": 1773950437,
-        "datetime": "2026-03-19 21:00"
+        "intent": "BLUETOOTH_ENABLE",
+        "ssid": "",
+        "action": "bluetooth_enable",
+        "timestamp": 1774077850,
+        "datetime": "2026-03-21 08:24"
+      },
+      {
+        "intent": "WIFI_LIST",
+        "ssid": "",
+        "action": "wifi_list",
+        "timestamp": 1774077763,
+        "datetime": "2026-03-21 08:22"
+      }
+    ],
+    "screen": [
+      {
+        "intent": "SCREEN_BRIGHTNESS",
+        "action": "brightness",
+        "timestamp": 1774077980,
+        "datetime": "2026-03-21 08:26"
+      },
+      {
+        "intent": "SCREEN_CAPTURE",
+        "action": "capture",
+        "timestamp": 1774077937,
+        "datetime": "2026-03-21 08:25"
       }
     ]
   },
   "stats": {
-    "session_count": 31,
-    "total_commands": 9
+    "session_count": 30,
+    "total_commands": 50
   },
-  "session_count": 31,
-  "_saved_at": "2026-03-19 21:01:29"
+  "session_count": 30,
+  "_saved_at": "2026-03-21 08:30:01"
 }

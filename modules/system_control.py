@@ -13,6 +13,7 @@ import subprocess
 import platform
 import datetime
 import ctypes
+import locale
 import psutil
 from config.logger import get_logger
 
@@ -29,6 +30,20 @@ class SystemControl:
     # ══════════════════════════════════════════════════════════════════════════
     #  LUNDI — Contrôle alimentation
     # ══════════════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _decode_process_output(raw) -> str:
+        """Decode subprocess output robustly on Windows consoles."""
+        if raw is None:
+            return ""
+        if isinstance(raw, str):
+            return raw.strip()
+        for enc in (locale.getpreferredencoding(False), "cp1252", "utf-8", "latin-1"):
+            try:
+                return raw.decode(enc).strip()
+            except Exception:
+                continue
+        return raw.decode("utf-8", errors="replace").strip()
 
     def shutdown(self, delay: int = 10) -> dict:
         """
@@ -47,7 +62,8 @@ class SystemControl:
                 {"delay": delay, "action": "shutdown"}
             )
         except subprocess.CalledProcessError as e:
-            return self._err(f"Erreur extinction : {e.stderr.decode()}")
+            err_msg = self._decode_process_output(e.stderr) or str(e)
+            return self._err(f"Erreur extinction : {err_msg}")
         except Exception as e:
             return self._err(f"Erreur inattendue : {str(e)}")
 
@@ -79,7 +95,8 @@ class SystemControl:
                 {"delay": delay, "action": "restart"}
             )
         except subprocess.CalledProcessError as e:
-            return self._err(f"Erreur redémarrage : {e.stderr.decode()}")
+            err_msg = self._decode_process_output(e.stderr) or str(e)
+            return self._err(f"Erreur redémarrage : {err_msg}")
         except Exception as e:
             return self._err(str(e))
 

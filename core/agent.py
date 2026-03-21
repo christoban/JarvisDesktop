@@ -322,6 +322,31 @@ class Agent:
             )
             return enriched
 
+        # ── Réponse directe (sans exécution) pour questions de connaissance ─
+        if intent == "KNOWLEDGE_QA":
+            direct_msg = (parsed.get("response_message") or "").strip()
+            if not direct_msg:
+                direct_msg = "Je peux répondre directement à cette question. Reformule-la en une phrase simple."
+
+            result = {
+                "success": True,
+                "message": direct_msg,
+                "data": {"mode": "knowledge_qa", "answered_by": parse_source},
+            }
+
+            self.context.add_user(raw)
+            self.context.add_assistant(direct_msg)
+
+            enriched = self._enrich(result, intent, confidence, parse_source)
+            self._save_history_entry(
+                command=raw,
+                result=enriched,
+                intent=intent,
+                source=source or parse_source,
+                duration_ms=int((time.time() - started) * 1000),
+            )
+            return enriched
+
         # ── Exécution ─────────────────────────────────────────────────────────
         result = self.executor.execute(intent, params, raw_command=raw, agent=self)
         result = self._normalize_result(result)
@@ -476,6 +501,12 @@ class Agent:
             parsed = self.parser.parse_with_context(reply, history_for_groq)
             p_intent = parsed.get("intent", "UNKNOWN")
             p_params = parsed.get("params", {}) or {}
+            if p_intent == "KNOWLEDGE_QA":
+                return {
+                    "success": True,
+                    "message": (parsed.get("response_message") or "").strip() or "Je te réponds directement.",
+                    "data": {"mode": "knowledge_qa", "answered_by": parsed.get("source", "groq")},
+                }
             if p_intent not in ("UNKNOWN", "INCOMPLETE", ""):
                 return self.executor.execute(
                     p_intent, p_params,
@@ -505,6 +536,12 @@ class Agent:
         # ── Déléguer à Groq avec contexte enrichi ────────────────────────────
         full_cmd = f"{original_cmd} — précision: {reply}"
         parsed = self.parser.parse(full_cmd)
+        if parsed.get("intent") == "KNOWLEDGE_QA":
+            return {
+                "success": True,
+                "message": (parsed.get("response_message") or "").strip() or "Je te réponds directement.",
+                "data": {"mode": "knowledge_qa", "answered_by": parsed.get("source", "groq")},
+            }
         if parsed.get("intent") not in ("UNKNOWN", ""):
             result = self.executor.execute(parsed["intent"], parsed["params"], raw_command=full_cmd, agent=self)
             return result
@@ -552,6 +589,70 @@ class Agent:
 
     def _build_clarification_if_needed(self, raw: str, intent: str, params: dict, confidence: float, source: str) -> dict | None:
         lower = raw.lower().strip()
+
+        # Garde-fou global: ne jamais executer une action sensible si l'utilisateur
+        # est en mode discussion/souvenir ou exprime une negation explicite.
+        destructive_intents = {
+            "SYSTEM_SHUTDOWN", "SYSTEM_RESTART", "SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL",
+            "SYSTEM_LOGOUT", "SYSTEM_KILL_PROCESS", "FILE_DELETE", "APP_CLOSE", "WINDOW_CLOSE",
+        }
+        if intent in destructive_intents:
+            memory_tone_markers = [
+                "tu te souviens", "tu te rappelles", "souviens toi", "rappelle toi",
+                "que tu avais", "que tu as", "est ce que", "c'etait", "c’était",
+            ]
+            if any(m in lower for m in memory_tone_markers) and ("?" in raw or "est ce que" in lower):
+                return {
+                    "success": True,
+                    "message": "Je confirme le contexte, sans executer d'action. Si tu veux une action, formule-la explicitement (ex: 'annule maintenant' ou 'laisse telle quelle').",
+                    "data": {"awaiting_choice": False, "kind": "context_confirmation_only"},
+                }
+
+            has_negation = (
+                "n'" in lower and "pas" in lower
+                or "ne " in lower and " pas" in lower
+                or "n " in lower and " pas" in lower
+            )
+            if has_negation:
+                return {
+                    "success": True,
+                    "message": "Compris, je n'exécute pas cette action sensible. Dis-moi exactement l'action positive à faire.",
+                    "data": {"awaiting_choice": False, "kind": "blocked_by_global_negation"},
+                }
+
+        # Cas conversationnel: question de souvenir, pas une action d'annulation.
+        memory_markers = ["tu te souviens", "tu te rappelles", "souviens toi", "rappelle toi"]
+        if intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"} and any(m in lower for m in memory_markers):
+            return {
+                "success": True,
+                "message": "Oui, je m'en souviens. C'etait une extinction planifiee apres 4 heures. Tu veux la conserver, l'ajuster, ou ajouter un rappel avant ?",
+                "data": {"awaiting_choice": False, "kind": "shutdown_memory_check"},
+            }
+
+        # Cas critique: negation explicite de l'annulation.
+        if intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}:
+            has_negated_cancel = (
+                "n'annule pas" in lower
+                or "ne l'annule pas" in lower
+                or "n annule pas" in lower
+                or ("annule" in lower and "pas" in lower)
+            )
+            if has_negated_cancel:
+                return {
+                    "success": True,
+                    "message": "Compris, je n'annule rien. Tu veux que j'ajoute seulement un rappel 5 minutes avant l'extinction ?",
+                    "data": {"awaiting_choice": False, "kind": "cancel_blocked_by_negation"},
+                }
+
+        # Suivi contextuel: "préviens/signal 5 minutes avant" ne doit pas
+        # être interprété comme une nouvelle extinction à 240s.
+        reminder_markers = ["avant", "minute", "minutes", "previens", "previent", "avert", "signal", "rappel"]
+        if intent in {"SYSTEM_SHUTDOWN", "SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"} and sum(1 for m in reminder_markers if m in lower) >= 2:
+            return {
+                "success": True,
+                "message": "J'ai compris: tu demandes un rappel avant l'extinction deja programmee. Je ne dois pas reprogrammer l'arret. Je peux garder l'extinction actuelle ou l'annuler si tu veux.",
+                "data": {"awaiting_choice": False, "kind": "shutdown_reminder_request"},
+            }
 
         # Cas critique: "mets ..." ambigu entre musique et action système/app.
         if intent == "AUDIO_PLAY" and lower.startswith("mets ") and "volume" not in lower:
@@ -944,6 +1045,7 @@ class Agent:
             self._memory.remember_event("system", {
                 "intent": intent,
                 "action": intent.lower(),
+                "delay_seconds": params.get("delay_seconds"),
             })
 
         # ── Réseau ────────────────────────────────────────────────────────────
@@ -1543,8 +1645,10 @@ class Agent:
 
                 print(f"\n{status} {result.get('message', '')}")
 
+                # Afficher le tableau SEULEMENT si demande explicite (flag _show_display)
+                should_show_display = result.get("_show_display", False)
                 data = result.get("data") or {}
-                if isinstance(data, dict) and "display" in data:
+                if should_show_display and isinstance(data, dict) and "display" in data:
                     print(data["display"])
 
                 if intent and intent not in ("UNKNOWN", "FOLLOWUP"):

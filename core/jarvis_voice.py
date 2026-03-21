@@ -39,6 +39,15 @@ _TIMEOUT_S = 8          # timeout Groq pour la génération de réponse
 _MAX_RESULT_CHARS = 600 # on tronque les données brutes envoyées à Groq
 _GROQ_RESPONSE_TOKENS = 120  # réponses courtes, naturelles
 
+_FACT_SENSITIVE_INTENTS = {
+    "SYSTEM_DISK",
+    "SYSTEM_INFO",
+    "SYSTEM_NETWORK",
+    "NETWORK_INFO",
+    "POWER_STATE",
+    "SYSTEM_PROCESSES",
+}
+
 # ── Fallbacks par intent (si Groq indisponible) ───────────────────────────────
 # Chaque liste a plusieurs variantes → tirée aléatoirement
 _FALLBACKS: dict[str, list[str]] = {
@@ -284,11 +293,61 @@ class JarvisVoice:
             )
             response = self._call_groq(messages)
             if response:
-                return self._clean(response)
+                cleaned = self._clean(response)
+                if self._is_fact_sensitive_intent(intent):
+                    if self._response_is_fact_consistent(intent, cleaned, exec_result):
+                        return cleaned
+                    logger.warning(f"JarvisVoice: réponse {intent} incohérente, fallback sécurisé appliqué.")
+                    grounded = self._grounded_fallback(intent, exec_result)
+                    if grounded:
+                        return grounded
+                return cleaned
         except Exception as e:
             logger.error(f"JarvisVoice.generate erreur: {e}")
 
         return self._fallback(intent, exec_result)
+
+    def _deterministic_message(self, intent: str, exec_result: dict) -> str | None:
+        """
+        Retourne une réponse strictement basée sur les données techniques
+        pour les intents sensibles aux chiffres.
+        """
+        if intent != "SYSTEM_DISK":
+            return None
+
+        data = (exec_result or {}).get("data") or {}
+        partitions = data.get("partitions") if isinstance(data, dict) else None
+        if not isinstance(partitions, list) or not partitions:
+            return "C'est affiche."
+
+        accessible = []
+        for p in partitions:
+            if not isinstance(p, dict):
+                continue
+            free_gb = p.get("free_gb")
+            if isinstance(free_gb, (int, float)):
+                accessible.append(p)
+
+        if not accessible:
+            return "C'est affiche."
+
+        total_free = round(sum(float(p.get("free_gb", 0.0)) for p in accessible), 1)
+
+        # Lister chaque disque explicitement (C:, E:, etc.) pour éviter toute ambiguïté.
+        def _drive_key(part: dict) -> str:
+            dev = str(part.get("device", "")).upper()
+            return dev[:2] if len(dev) >= 2 and dev[1] == ":" else dev
+
+        detail_parts = []
+        for part in sorted(accessible, key=lambda p: _drive_key(p)):
+            drive = _drive_key(part) or "?"
+            free_gb = float(part.get("free_gb", 0.0))
+            detail_parts.append(f"{drive} {free_gb:.1f} Go libres")
+
+        detail = " | ".join(detail_parts)
+        if detail:
+            return f"Espace libre total detecte: {total_free:.1f} Go ({detail})."
+        return f"Espace libre total detecte: {total_free:.1f} Go."
 
     def generate_proactive(self, situation: str, context: dict | None = None) -> str:
         """
@@ -374,6 +433,19 @@ class JarvisVoice:
             f"Génère la réponse naturelle de Jarvis."
         )
 
+        # Pour les intents sensibles aux faits/chiffres, imposer un ancrage réel.
+        if self._is_fact_sensitive_intent(intent):
+            truth = self._grounding_hint(intent, exec_result)
+            if truth:
+                context_msg += (
+                    "\n\n---\n"
+                    "DONNÉES RÉELLES (strictement obligatoire):\n"
+                    f"{truth}\n"
+                    "---\n"
+                    "RÈGLES: N'invente AUCUN nombre, disque, ou valeur.\n"
+                    "Cite UNIQUEMENT les données ci-dessus. Zéro exception."
+                )
+
         messages.append({"role": "user", "content": context_msg})
         return messages
 
@@ -432,6 +504,169 @@ class JarvisVoice:
         success = bool((exec_result or {}).get("success", False))
         bucket = "_success" if success else "_error"
         return random.choice(_FALLBACKS[bucket])
+
+    @staticmethod
+    def _is_fact_sensitive_intent(intent: str) -> bool:
+        return intent in _FACT_SENSITIVE_INTENTS
+
+    def _grounding_hint(self, intent: str, exec_result: dict) -> str:
+        if intent == "SYSTEM_DISK":
+            return self._disk_truth_hint(exec_result)
+
+        msg = str((exec_result or {}).get("message", "")).strip()
+        data = (exec_result or {}).get("data") or {}
+        display = data.get("display") if isinstance(data, dict) else ""
+        display_line = ""
+        if isinstance(display, str) and display.strip():
+            display_line = display.strip().splitlines()[-1][:120]
+
+        parts = []
+        if msg:
+            parts.append(f"Données: {msg[:150]}")
+        if display_line:
+            parts.append(f"Extrait: {display_line}")
+        
+        return " | ".join(parts) if parts else ""
+
+    def _grounded_fallback(self, intent: str, exec_result: dict) -> str | None:
+        deterministic = self._deterministic_message(intent, exec_result)
+        if deterministic:
+            return deterministic
+
+        data = (exec_result or {}).get("data") or {}
+        if isinstance(data, dict) and isinstance(data.get("display"), str) and data.get("display", "").strip():
+            return "C'est affiche."
+
+        raw_msg = str((exec_result or {}).get("message", "")).strip()
+        if raw_msg:
+            return raw_msg[:180]
+        return None
+
+    def _disk_truth_hint(self, exec_result: dict) -> str:
+        data = (exec_result or {}).get("data") or {}
+        partitions = data.get("partitions") if isinstance(data, dict) else None
+        if not isinstance(partitions, list) or not partitions:
+            return ""
+
+        accessible = [p for p in partitions if isinstance(p, dict) and isinstance(p.get("free_gb"), (int, float))]
+        if not accessible:
+            return ""
+
+        total_free = round(sum(float(p.get("free_gb", 0.0)) for p in accessible), 1)
+        
+        drive_infos = []
+        for part in accessible:
+            dev = str(part.get("device", "")).upper()
+            drive = dev[:2] if len(dev) >= 2 and dev[1] == ":" else dev
+            free_gb = float(part.get('free_gb', 0.0))
+            drive_infos.append(f"{drive}: {free_gb:.1f}Go")
+
+        return (
+            f"Total: {total_free:.1f}Go | "
+            + " | ".join(drive_infos) + 
+            f" (Cite ces chiffres EXACTEMENT, pas d'autres)"
+        )
+
+    def _response_is_fact_consistent(self, intent: str, text: str, exec_result: dict) -> bool:
+        # Validation spécifique disque (disques + chiffres)
+        if intent == "SYSTEM_DISK":
+            return self._disk_message_is_consistent(text, exec_result)
+
+        # Validation générique: si Groq met des chiffres, ils doivent venir des données réelles.
+        mentioned = self._extract_numbers(text)
+        if not mentioned:
+            return True
+
+        allowed = self._extract_allowed_numbers(exec_result)
+        if not allowed:
+            return True
+
+        for m in mentioned:
+            if not any(abs(m - a) <= 0.2 for a in allowed):
+                return False
+        return True
+
+    @staticmethod
+    def _extract_numbers(text: str) -> list[float]:
+        vals = []
+        for raw in re.findall(r"\d+(?:[\.,]\d+)?", text or ""):
+            try:
+                vals.append(float(raw.replace(",", ".")))
+            except ValueError:
+                continue
+        return vals
+
+    def _extract_allowed_numbers(self, exec_result: dict) -> list[float]:
+        out: list[float] = []
+
+        def walk(obj):
+            if isinstance(obj, bool):
+                return
+            if isinstance(obj, (int, float)):
+                out.append(float(obj))
+                return
+            if isinstance(obj, str):
+                out.extend(self._extract_numbers(obj))
+                return
+            if isinstance(obj, dict):
+                for v in obj.values():
+                    walk(v)
+                return
+            if isinstance(obj, list):
+                for v in obj:
+                    walk(v)
+
+        walk((exec_result or {}).get("message", ""))
+        walk((exec_result or {}).get("data", {}))
+
+        # Dédupliquer sans trop perdre la précision utile.
+        uniq = sorted({round(v, 2) for v in out})
+        return uniq
+
+    def _disk_message_is_consistent(self, text: str, exec_result: dict) -> bool:
+        data = (exec_result or {}).get("data") or {}
+        partitions = data.get("partitions") if isinstance(data, dict) else None
+        if not isinstance(partitions, list) or not partitions:
+            return True
+
+        accessible = [p for p in partitions if isinstance(p, dict) and isinstance(p.get("free_gb"), (int, float))]
+        if not accessible:
+            return True
+
+        lowered = text.lower()
+        total_free = round(sum(float(p.get("free_gb", 0.0)) for p in accessible), 1)
+
+        allowed_drives = set()
+        required_pairs = []
+        for part in accessible:
+            dev = str(part.get("device", "")).upper()
+            drive = dev[:2] if len(dev) >= 2 and dev[1] == ":" else dev
+            if not drive:
+                continue
+            allowed_drives.add(drive)
+            required_pairs.append((drive, float(part.get("free_gb", 0.0))))
+
+        mentioned_drives = set(re.findall(r"\b([A-Z]:)", text.upper()))
+        if not mentioned_drives.issubset(allowed_drives):
+            return False
+
+        if not self._contains_value(lowered, total_free):
+            return False
+
+        for drive, free_gb in required_pairs:
+            drive_letter = drive[0].lower()
+            if not re.search(rf"\b{drive_letter}\s*:", lowered):
+                return False
+            if not self._contains_value(lowered, free_gb):
+                return False
+
+        return True
+
+    @staticmethod
+    def _contains_value(text_lower: str, value: float) -> bool:
+        dot = f"{value:.1f}"
+        comma = dot.replace(".", ",")
+        return dot in text_lower or comma in text_lower
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
