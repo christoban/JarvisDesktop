@@ -1,37 +1,28 @@
 """
 modules/browser/browser_control.py — Façade principale du browser
 ==================================================================
+
 Semaine 5 — Améliorations :
-
   [S5-1] Lancement auto Chrome avec --remote-debugging-port=9222
-          Jarvis sait maintenant comment Chrome est lancé — plus besoin
-          de le faire manuellement. CDPSession.ensure_session() le démarre si absent.
+  [S5-2] Gestion multi-onglets intelligente
+  [S5-3] Recherche Google améliorée + extraction résultats
+  [S5-4] Formulaires et téléchargements
+  [S5-5] Résumé de page via Groq
 
-  [S5-2] Gestion multi-onglets intelligente :
-          - find_tab_by_title() : trouver un onglet par titre/URL
-          - switch_to_tab()     : basculer sur un onglet par index ou mot-clé
-          - list_tabs()         : lister tous les onglets ouverts
-          - close_tab()         : fermer l'onglet actif ou un onglet cible
+CORRECTIONS AUDIT semaines 1-5 :
+  [C4] list_search_results() : nouvelle méthode publique qui expose les résultats
+       de la dernière recherche mémorisés dans CDPSession._shared_search_results
+       (correction B14 semaine 5). Remplace l'ancien _browser_list_results qui
+       pointait par erreur vers extract_links() (liens de la page).
+  [C5] fill_form() : ajout du paramètre submit=False.
+       Avant : submit était accepté par l'executor mais ignoré silencieusement.
+       Après : si submit=True, appelle page_actions.submit_form() après remplissage.
 
-  [S5-3] Recherche Google améliorée :
-          - Correction définitive du `or True` parasite (B16 semaine 1)
-          - Extraction des résultats avec titres, URLs, descriptions
-          - Navigation vers un résultat par rang ("ouvre le 2e résultat")
-          - Résumé automatique de la page ouverte
-
-  [S5-4] Formulaires et téléchargements (délégués à PageActions) :
-          - fill_form()      : remplir un formulaire par sélecteur/label
-          - download_file()  : télécharger un fichier depuis l'URL active
-
-  [S5-5] Résumé de page via Groq :
-          - summarize_page() : résumé IA de la page active
-          - read_page()      : extraire le texte brut de la page
-
-Architecture (inchangée) :
+Architecture :
     BrowserControl (façade)
-        └─ CDPSession    : connexion WebSocket Chrome DevTools Protocol
-        └─ PageActions   : actions sur les pages (click, type, extract...)
-        └─ AutonomousBrowser : navigation intelligente multi-étapes
+    └─ CDPSession  : connexion WebSocket Chrome DevTools Protocol
+    └─ PageActions : actions sur les pages (click, type, extract...)
+    └─ AutonomousBrowser : navigation intelligente multi-étapes
 """
 
 from __future__ import annotations
@@ -52,14 +43,14 @@ logger = get_logger(__name__)
 
 # ── URLs de recherche par moteur ──────────────────────────────────────────────
 SITE_SEARCH_URLS = {
-    "google":      "https://www.google.com/search?q={}",
-    "bing":        "https://www.bing.com/search?q={}",
-    "duckduckgo":  "https://duckduckgo.com/?q={}",
-    "youtube":     "https://www.youtube.com/results?search_query={}",
-    "github":      "https://github.com/search?q={}",
-    "stackoverflow": "https://stackoverflow.com/search?q={}",
-    "wikipedia":   "https://fr.wikipedia.org/w/index.php?search={}",
-    "amazon":      "https://www.amazon.fr/s?k={}",
+    "google":       "https://www.google.com/search?q={}",
+    "bing":         "https://www.bing.com/search?q={}",
+    "duckduckgo":   "https://duckduckgo.com/?q={}",
+    "youtube":      "https://www.youtube.com/results?search_query={}",
+    "github":       "https://github.com/search?q={}",
+    "stackoverflow":"https://stackoverflow.com/search?q={}",
+    "wikipedia":    "https://fr.wikipedia.org/w/index.php?search={}",
+    "amazon":       "https://www.amazon.fr/s?k={}",
 }
 
 # ── Chemins Chrome selon l'OS ─────────────────────────────────────────────────
@@ -69,9 +60,10 @@ CHROME_PATHS = {
         r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
         str(Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "Application" / "chrome.exe"),
     ],
-    "linux": ["/usr/bin/google-chrome", "/usr/bin/chromium-browser", "/usr/bin/chromium"],
+    "linux":  ["/usr/bin/google-chrome", "/usr/bin/chromium-browser", "/usr/bin/chromium"],
     "darwin": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
 }
+
 CDP_PORT = 9222
 
 
@@ -83,30 +75,24 @@ class BrowserControl:
 
     def __init__(self):
         self._session = CDPSession(debug_port=CDP_PORT)
-        self._page     = PageActions(self._session)
-        self._auto     = AutonomousBrowser(self._session, self._page)
+        self._page    = PageActions(self._session)
+        self._auto    = AutonomousBrowser(self._session, self._page)
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  [S5-1] LANCEMENT CHROME — automatique si absent
+    # [S5-1] LANCEMENT CHROME — automatique si absent
     # ══════════════════════════════════════════════════════════════════════════
 
     def ensure_chrome_running(self) -> dict:
-        """
-        Vérifie si Chrome tourne avec CDP, le lance sinon.
-        Appelé automatiquement par toutes les méthodes qui ont besoin du navigateur.
-        """
-        # Tenter de se connecter
+        """Vérifie si Chrome tourne avec CDP, le lance sinon."""
         ready = self._session.ensure_session(launch_if_missing=False)
         if ready["success"]:
             return ready
 
-        # Chrome non disponible — le lancer
         logger.info("Chrome non détecté — lancement automatique...")
         launch = self._launch_chrome()
         if not launch["success"]:
             return launch
 
-        # Attendre que CDP soit prêt (max 5s)
         for _ in range(10):
             time.sleep(0.5)
             ready = self._session.ensure_session(launch_if_missing=False)
@@ -122,24 +108,21 @@ class BrowserControl:
     def _launch_chrome(self) -> dict:
         """Lance Chrome avec --remote-debugging-port=9222."""
         import platform
-        system = platform.system().lower()
-        paths = CHROME_PATHS.get("windows" if system == "windows" else system, [])
-
+        system     = platform.system().lower()
+        paths      = CHROME_PATHS.get("windows" if system == "windows" else system, [])
         chrome_exe = None
+
         for path in paths:
             if Path(path).exists():
                 chrome_exe = path
                 break
 
         if not chrome_exe:
-            # Chercher chrome dans le PATH
             import shutil
             chrome_exe = shutil.which("google-chrome") or shutil.which("chromium") or shutil.which("chrome")
 
         if not chrome_exe:
-            return self._err(
-                "Chrome introuvable. Installe Google Chrome ou ajoute-le au PATH."
-            )
+            return self._err("Chrome introuvable. Installe Google Chrome ou ajoute-le au PATH.")
 
         try:
             args = [
@@ -156,7 +139,7 @@ class BrowserControl:
             return self._err(f"Impossible de lancer Chrome : {e}")
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  [S5-2] GESTION MULTI-ONGLETS INTELLIGENTE
+    # [S5-2] GESTION MULTI-ONGLETS INTELLIGENTE
     # ══════════════════════════════════════════════════════════════════════════
 
     def list_tabs(self) -> dict:
@@ -180,11 +163,10 @@ class BrowserControl:
             for i, t in enumerate(tabs)
         ]
 
-        lines = [f"{'N°':>3}  {'TITRE':<40} URL"]
-        lines.append("─" * 75)
+        lines = [f"{'N°':>3} {'TITRE':<40} URL", "─" * 75]
         for t in tab_list:
             mark = "▶ " if t["active"] else "  "
-            lines.append(f"{mark}{t['index']:>2}  {t['title'][:39]:<40} {t['url'][:28]}")
+            lines.append(f"{mark}{t['index']:>2} {t['title'][:39]:<40} {t['url'][:28]}")
 
         return self._ok(
             f"{len(tabs)} onglet(s) ouvert(s).",
@@ -192,13 +174,7 @@ class BrowserControl:
         )
 
     def switch_to_tab(self, query: str = "", index: int = 0) -> dict:
-        """
-        Bascule sur un onglet par index (1-based) ou mot-clé (titre/URL).
-
-        Exemple :
-          switch_to_tab(index=2)         → onglet n°2
-          switch_to_tab(query="youtube") → onglet YouTube
-        """
+        """Bascule sur un onglet par index (1-based) ou mot-clé (titre/URL)."""
         ready = self._ensure()
         if not ready["success"]:
             return ready
@@ -214,15 +190,12 @@ class BrowserControl:
                 target = tabs[index - 1]
             else:
                 return self._err(f"Onglet n°{index} inexistant (il y a {len(tabs)} onglet(s)).")
-
         elif query:
             q = query.lower().strip()
-            # Correspondance exacte titre
             for t in tabs:
                 if q == (t.title or "").lower().strip():
                     target = t
                     break
-            # Correspondance partielle titre
             if not target:
                 for t in tabs:
                     if q in (t.title or "").lower() or q in (t.url or "").lower():
@@ -232,10 +205,10 @@ class BrowserControl:
         if not target:
             return self._err(
                 f"Onglet '{query or index}' non trouvé. "
-                f"Dis 'liste les onglets' pour voir les onglets ouverts."
+                "Dis 'liste les onglets' pour voir les onglets ouverts."
             )
 
-        result = self._session.focus_tab(target)
+        self._session.focus_tab(target)
         return self._ok(
             f"Basculé sur : {target.title or target.url or 'onglet'}.",
             {"tab": {"id": target.id, "title": target.title, "url": target.url}},
@@ -246,17 +219,13 @@ class BrowserControl:
         ready = self._ensure()
         if not ready["success"]:
             return ready
-
         result = self._session.new_tab(url)
         if url and result["success"]:
             time.sleep(1.0)
         return result
 
     def close_tab(self, query: str = "", index: int = 0) -> dict:
-        """
-        Ferme un onglet par mot-clé ou index.
-        Sans argument : ferme l'onglet actif.
-        """
+        """Ferme un onglet par mot-clé ou index. Sans argument : ferme l'actif."""
         ready = self._ensure()
         if not ready["success"]:
             return ready
@@ -266,10 +235,8 @@ class BrowserControl:
             return self._err("Aucun onglet à fermer.")
 
         if not query and not index:
-            # Fermer l'onglet actif (premier de la liste)
             return self._session.close_tab_by_id(tabs[0].id)
 
-        # Trouver l'onglet cible
         target: CDPTab | None = None
         if index > 0 and index <= len(tabs):
             target = tabs[index - 1]
@@ -302,36 +269,25 @@ class BrowserControl:
         )
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  [S5-3] RECHERCHE GOOGLE AMÉLIORÉE
+    # [S5-3] RECHERCHE GOOGLE AMÉLIORÉE
     # ══════════════════════════════════════════════════════════════════════════
 
-    def google_search(
-        self,
-        query: str,
-        engine: str = "google",
-        new_tab: bool = False,
-    ) -> dict:
+    def google_search(self, query: str, engine: str = "google", new_tab: bool = False) -> dict:
         """
         Lance une recherche et extrait les résultats.
         [S5-3] Correction B16 : suppression du `or True` parasite.
-
-        Retourne les résultats (titre, url, description) pour permettre
-        à l'utilisateur de dire "ouvre le 2e résultat".
         """
         query = (query or "").strip()
         if not query:
             return self._err("Requête de recherche vide.")
 
-        # [B16 corrigé] : on appelle ensure_session directement, sans `or True`
         ready = self._session.ensure_session(launch_if_missing=True)
         if not ready["success"]:
-            # Fallback OS : ouvrir Chrome avec l'URL de recherche
             return self._os_search_fallback(query, engine)
 
         search_url = SITE_SEARCH_URLS.get(engine.lower(), SITE_SEARCH_URLS["google"])
-        url = search_url.format(quote_plus(query))
+        url        = search_url.format(quote_plus(query))
 
-        # Ouvrir dans un nouvel onglet ou l'actuel
         tabs = self._session.get_tabs()
         if new_tab or not tabs:
             tab_result = self._session.new_tab(url)
@@ -352,7 +308,6 @@ class BrowserControl:
                 return self._os_search_fallback(query, engine)
             time.sleep(2.0)
 
-        # Extraire les résultats
         extracted = self._page.extract_search_results(active_tab, max_results=8)
         if not extracted["success"] or not extracted.get("data", {}).get("results"):
             return self._ok(
@@ -361,14 +316,13 @@ class BrowserControl:
                 {"query": query, "url": url, "engine": engine, "results": []}
             )
 
-        data = extracted["data"]
-        data["query"] = query
+        data           = extracted["data"]
+        data["query"]  = query
         data["engine"] = engine
-        count = data.get("count", 0)
+        count          = data.get("count", 0)
 
-        # Formater l'affichage
         results = data.get("results", [])
-        lines = [f"Résultats pour '{query}' ({engine.title()}) :"]
+        lines   = [f"Résultats pour '{query}' ({engine.title()}) :"]
         for r in results[:5]:
             lines.append(f"  {r.get('rank', '?')}. {r.get('title', '?')}")
             lines.append(f"     {r.get('url', '')[:60]}")
@@ -377,23 +331,20 @@ class BrowserControl:
         data["display"] = "\n".join(lines)
 
         return self._ok(
-            f"'{query}' : {count} résultat(s). Dis 'ouvre le Nième résultat' pour naviguer.",
+            f"'{query}' : {count} résultat(s). "
+            "Dis 'ouvre le Nième résultat' pour naviguer.",
             data
         )
 
     def open_search_result(self, rank: int = 1) -> dict:
-        """
-        Ouvre le Nième résultat de la dernière recherche.
-        Exemple : "ouvre le 2e résultat"
-        """
+        """Ouvre le Nième résultat de la dernière recherche."""
         ready = self._ensure()
         if not ready["success"]:
             return ready
 
         result = self._page.open_search_result(rank)
+        url    = (result.get("data") or {}).get("url", "")
 
-        # Si le résultat contient une URL, naviguer dessus
-        url = (result.get("data") or {}).get("url", "")
         if url and result["success"]:
             tabs = self._session.get_tabs()
             if tabs:
@@ -404,13 +355,54 @@ class BrowserControl:
                         f"Résultat n°{rank} ouvert : {url[:60]}",
                         {"url": url, "rank": rank}
                     )
-
         return result
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # [C4] RÉSULTATS DE RECHERCHE MÉMORISÉS — nouvelle méthode
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def list_search_results(self) -> dict:
+        """
+        [C4] Retourne les résultats de la dernière recherche mémorisés.
+
+        Les résultats sont stockés dans CDPSession._shared_search_results
+        par PageActions.extract_search_results() (correction B14 semaine 5).
+
+        Avant cette correction, _browser_list_results dans l'executor pointait
+        vers extract_links() qui retournait les liens de la page active —
+        pas du tout les résultats de recherche.
+        """
+        results = self._page._last_search_results  # propriété B14 dans page_actions.py
+
+        if not results:
+            return self._ok(
+                "Aucun résultat mémorisé. Lance d'abord une recherche "
+                "(ex: 'cherche Python sur Google').",
+                {"results": [], "count": 0}
+            )
+
+        lines = [f"Résultats de recherche ({len(results)}) :"]
+        for r in results[:8]:
+            rank  = r.get("rank", "?")
+            title = (r.get("title") or "(sans titre)")[:55]
+            url   = (r.get("url") or "")[:60]
+            lines.append(f"  {rank}. {title}")
+            lines.append(f"     {url}")
+
+        return self._ok(
+            f"{len(results)} résultat(s) disponible(s). "
+            "Dis 'ouvre le 2e résultat' pour en ouvrir un.",
+            {
+                "results": results,
+                "count":   len(results),
+                "display": "\n".join(lines),
+            }
+        )
 
     def _os_search_fallback(self, query: str, engine: str = "google") -> dict:
         """Fallback OS : ouvrir la recherche dans le navigateur par défaut."""
         search_url = SITE_SEARCH_URLS.get(engine.lower(), SITE_SEARCH_URLS["google"])
-        url = search_url.format(quote_plus(query))
+        url        = search_url.format(quote_plus(query))
         try:
             import platform
             system = platform.system().lower()
@@ -428,12 +420,12 @@ class BrowserControl:
             return self._err(f"Impossible d'ouvrir la recherche : {e}")
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  NAVIGATION DE BASE
+    # NAVIGATION DE BASE
     # ══════════════════════════════════════════════════════════════════════════
 
     def open_url(self, url: str) -> dict:
         """Ouvre une URL dans l'onglet actif."""
-        url = normalize_url(url.strip())
+        url   = normalize_url(url.strip())
         if not url:
             return self._err("URL vide.")
 
@@ -482,7 +474,7 @@ class BrowserControl:
         return self._session.reload_tab(tabs[0])
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  LECTURE ET RÉSUMÉ DE PAGE
+    # LECTURE ET RÉSUMÉ DE PAGE
     # ══════════════════════════════════════════════════════════════════════════
 
     def read_page(self) -> dict:
@@ -526,29 +518,65 @@ class BrowserControl:
         return self._page.scroll(tabs[0], direction)
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  [S5-4] FORMULAIRES ET TÉLÉCHARGEMENTS
+    # [S5-4] FORMULAIRES ET TÉLÉCHARGEMENTS
     # ══════════════════════════════════════════════════════════════════════════
 
-    def fill_form(self, selector: str, value: str) -> dict:
+    def fill_form(self, selector: str, value: str, submit: bool = False) -> dict:
         """
-        Remplit un champ de formulaire.
+        Remplit un champ de formulaire et optionnellement soumet.
+
+        [C5] Paramètre submit ajouté. Avant cette correction, submit était
+        reçu par l'executor mais ignoré silencieusement car l'ancienne signature
+        était fill_form(selector, value) sans submit.
 
         Args:
-            selector : sélecteur CSS ou texte du label (ex: "#search", "Nom")
+            selector : sélecteur CSS ("#search") ou texte du label ("Nom")
             value    : valeur à saisir
+            submit   : si True, soumet le formulaire après remplissage
         """
         ready = self._ensure()
         if not ready["success"]:
             return ready
+
         tabs = self._session.get_tabs()
         if not tabs:
             return self._err("Aucun onglet ouvert.")
 
-        # Essayer par sélecteur CSS, puis par label
+        tab = tabs[0]
+
+        # Remplir le champ
         if selector.startswith(("#", ".", "[")):
-            return self._page.fill_field_by_selector(tabs[0], selector, value)
+            fill_result = self._page.fill_field_by_selector(tab, selector, value)
         else:
-            return self._page.fill_field_by_label(tabs[0], selector, value)
+            fill_result = self._page.fill_field_by_label(tab, selector, value)
+
+        if not fill_result["success"]:
+            return fill_result
+
+        # [C5] Soumettre si demandé
+        if submit:
+            submit_result = self._page.submit_form(tab)
+            if submit_result["success"]:
+                return self._ok(
+                    f"Champ '{selector}' rempli avec '{value[:30]}' et formulaire soumis.",
+                    {"selector": selector, "value": value, "submitted": True}
+                )
+            # Remplissage OK mais soumission échouée
+            return self._ok(
+                f"Champ '{selector}' rempli mais soumission échouée : "
+                f"{submit_result.get('message', 'inconnu')}.",
+                {
+                    "selector":    selector,
+                    "value":       value,
+                    "submitted":   False,
+                    "submit_error": submit_result.get("message", ""),
+                }
+            )
+
+        return self._ok(
+            f"Champ '{selector}' rempli avec '{value[:30]}'.",
+            {"selector": selector, "value": value, "submitted": False}
+        )
 
     def click_element(self, text: str) -> dict:
         """Clique sur un élément par son texte visible."""
@@ -571,41 +599,28 @@ class BrowserControl:
         return self._page.smart_type(tabs[0], text, submit=submit)
 
     def download_file(self, url: str = "", save_dir: str = "") -> dict:
-        """
-        Télécharge un fichier depuis une URL ou depuis la page active.
-
-        Args:
-            url      : URL directe du fichier (sinon : URL de la page active)
-            save_dir : dossier de destination (défaut : ~/Downloads)
-        """
+        """Télécharge un fichier depuis une URL ou depuis la page active."""
         import urllib.request
         import platform
 
         if not url:
-            # Utiliser l'URL de la page active
             ready = self._ensure()
             if not ready["success"]:
                 return ready
             tabs = self._session.get_tabs()
-            url = tabs[0].url if tabs else ""
+            url  = tabs[0].url if tabs else ""
 
         if not url or not url.startswith("http"):
             return self._err("URL de téléchargement invalide.")
 
-        # Dossier de destination
         if not save_dir:
-            system = platform.system().lower()
-            if system == "windows":
-                save_dir = str(Path.home() / "Downloads")
-            else:
-                save_dir = str(Path.home() / "Downloads")
+            save_dir = str(Path.home() / "Downloads")
 
         save_path = Path(save_dir)
         save_path.mkdir(parents=True, exist_ok=True)
 
-        # Nom du fichier depuis l'URL
         filename = url.split("/")[-1].split("?")[0] or "fichier_telecharge"
-        dest = save_path / filename
+        dest     = save_path / filename
 
         try:
             logger.info(f"Téléchargement : {url} → {dest}")
@@ -619,7 +634,7 @@ class BrowserControl:
             return self._err(f"Téléchargement échoué : {e}")
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  NAVIGATION INTELLIGENTE (délégue à AutonomousBrowser)
+    # NAVIGATION INTELLIGENTE (délégue à AutonomousBrowser)
     # ══════════════════════════════════════════════════════════════════════════
 
     def go_to_site(self, site: str, query: str = "") -> dict:
@@ -635,10 +650,7 @@ class BrowserControl:
         return self._auto.find_best_result_and_open(query)
 
     def multi_step_task(self, steps: list[str]) -> dict:
-        """
-        Exécute une séquence de commandes navigateur.
-        [B5 corrigé semaine 1] : utilise la session courante entre les étapes.
-        """
+        """Exécute une séquence de commandes navigateur."""
         return self._auto.multi_step_task(steps)
 
     def get_browser_context(self) -> dict:
@@ -651,83 +663,64 @@ class BrowserControl:
         if not ready["success"]:
             return self._ok("Navigateur déjà fermé.", {})
 
-        tabs = self._session.get_tabs()
-        closed = 0
+        tabs    = self._session.get_tabs()
+        closed  = 0
         for tab in tabs:
             result = self._session.close_tab_by_id(tab.id)
             if result.get("success"):
                 closed += 1
-
         return self._ok(f"{closed} onglet(s) fermé(s).", {"closed": closed})
 
-    # ══════════════════════════════════════════════════════════════════════════
-    #  DISPATCH — commandes texte libres
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def dispatch(self, command: str) -> dict:
-        """
-        Dispatch une commande en langage naturel vers la bonne méthode.
-        Utilisé par les macros et le mode autonome.
-        """
-        cmd = command.strip().lower()
-
-        # Recherche
-        if any(k in cmd for k in ["cherche", "recherche", "google"]):
-            q = re.sub(r"^(cherche|recherche|google)\s+", "", cmd).strip()
-            return self.google_search(q)
-
-        if "youtube" in cmd:
-            q = re.sub(r".*youtube\s*", "", cmd).strip()
-            return self.go_to_site("youtube", query=q)
-
-        if "github" in cmd:
-            q = re.sub(r".*github\s*", "", cmd).strip()
-            return self.go_to_site("github", query=q)
-
-        # Résultats de recherche
-        rank_match = re.search(r"(premier|deuxi[eè]me|troisi[eè]me|\d+)[eè]?\s+r[eé]sultat", cmd)
-        if rank_match:
-            rank_str = rank_match.group(1)
-            rank_map = {"premier": 1, "deuxième": 2, "troisième": 3, "deuxieme": 2, "troisieme": 3}
-            rank = rank_map.get(rank_str, int(rank_str) if rank_str.isdigit() else 1)
-            return self.open_search_result(rank)
-
-        # Résumé / lecture
-        if "résume" in cmd or "resume" in cmd or "résumé" in cmd:
-            return self.summarize_page()
-        if "lis la page" in cmd or "lire la page" in cmd:
-            return self.read_page()
-
-        # Onglets
-        if "liste les onglets" in cmd or "onglets ouverts" in cmd:
-            return self.list_tabs()
-        if "nouvel onglet" in cmd:
-            return self.new_tab()
-        if "ferme l'onglet" in cmd or "ferme cet onglet" in cmd:
-            return self.close_tab()
-
-        # Navigation
-        if "retour" in cmd or "page précédente" in cmd:
-            return self.navigate_back()
-        if "page suivante" in cmd:
-            return self.navigate_forward()
-        if "recharge" in cmd or "actualise" in cmd:
-            return self.reload_page()
-
-        # Scroll
-        if "scroll" in cmd or "scrolle" in cmd or "défile" in cmd:
-            direction = "up" if "haut" in cmd else "bottom" if "bas de la page" in cmd else "down"
-            return self.scroll(direction)
-
-        # URL directe
-        url = normalize_url(command.strip())
-        if url.startswith("http"):
+    def open_browser(self, browser: str = None, url: str = "") -> dict:
+        """Ouvre le navigateur, optionnellement sur une URL."""
+        result = self.ensure_chrome_running()
+        if url and result["success"]:
             return self.open_url(url)
+        return result
 
-        return self._err(f"Commande navigateur non reconnue : '{command}'")
+    def search_youtube(self, query: str) -> dict:
+        """Cherche sur YouTube."""
+        return self.go_to_site("youtube", query)
+
+    def search_github(self, query: str) -> dict:
+        """Cherche sur GitHub."""
+        return self.go_to_site("github", query)
+
+    def go_back(self) -> dict:
+        return self.navigate_back()
+
+    def go_forward(self) -> dict:
+        return self.navigate_forward()
+
+    def reload_tab(self, hard: bool = False, index: int = None) -> dict:
+        return self.reload_page()
+
+    def switch_tab(self, index: int = 0, query: str = "") -> dict:
+        return self.switch_to_tab(query=query, index=index)
+
+    def open_new_tab(self, url: str = "") -> dict:
+        return self.new_tab(url)
+
+    def navigate_to(self, url: str) -> dict:
+        return self.open_url(url)
+
+    def find_best_and_open(self, query: str) -> dict:
+        return self.find_best_result_and_open(query)
+
+    def click_text(self, text: str) -> dict:
+        return self.click_element(text)
+
+    def smart_type(self, text: str, submit: bool = False) -> dict:
+        return self.type_text(text, submit)
+
+    def fill_form_field(self, selector: str, value: str, submit: bool = False) -> dict:
+        return self.fill_form(selector, value, submit)
+
+    def extract_search_results(self) -> dict:
+        return self.list_search_results()
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  HELPERS PRIVÉS
+    # HELPERS PRIVÉS
     # ══════════════════════════════════════════════════════════════════════════
 
     def _ensure(self) -> dict:
@@ -755,10 +748,10 @@ class BrowserControl:
     def health_check(self) -> dict:
         """Vérifie l'état du navigateur."""
         ready = self._session.ensure_session(launch_if_missing=False)
-        tabs = self._session.get_tabs() if ready["success"] else []
+        tabs  = self._session.get_tabs() if ready["success"] else []
         return {
-            "success":     ready["success"],
-            "message":     "Navigateur opérationnel." if ready["success"] else "Navigateur non disponible.",
+            "success": ready["success"],
+            "message": "Navigateur opérationnel." if ready["success"] else "Navigateur non disponible.",
             "data": {
                 "cdp_available": ready["success"],
                 "tab_count":     len(tabs),
@@ -769,7 +762,7 @@ class BrowserControl:
 
     @staticmethod
     def _ok(message: str, data=None) -> dict:
-        return {"success": True, "message": message, "data": data}
+        return {"success": True,  "message": message, "data": data}
 
     @staticmethod
     def _err(message: str, data=None) -> dict:

@@ -11,21 +11,21 @@ DIFFÉRENCE CLÉ vs l'ancienne version :
 
 SEMAINE 2 — CORRECTIONS :
   [B8]  Ajout des intents MUSIC_* dans le catalogue INTENTS.
-  [B9]  Fallback keywords étendu — 25+ nouveaux patterns reconnus :
-        SCREEN_BRIGHTNESS, SCREEN_OFF, SCREEN_INFO, SCREEN_CAPTURE,
-        SCREENSHOT_TO_PHONE, SYSTEM_UNLOCK, SCREEN_UNLOCK,
-        POWER_SLEEP, POWER_HIBERNATE, POWER_CANCEL, POWER_STATE,
-        REPEAT_LAST, HISTORY_SHOW, HISTORY_CLEAR, HISTORY_SEARCH,
-        MACRO_RUN, MACRO_LIST, MACRO_SAVE, MACRO_DELETE,
-        BLUETOOTH_ENABLE, BLUETOOTH_DISABLE, BLUETOOTH_LIST,
-        WIFI_LIST, WIFI_CONNECT, WIFI_DISCONNECT, WIFI_ENABLE, WIFI_DISABLE,
-        NETWORK_INFO, WAKE_ON_LAN, MEMORY_SHOW, DOC_READ, DOC_SUMMARIZE,
-        DOC_SEARCH_WORD, FOLDER_LIST, FOLDER_CREATE, WINDOW_CLOSE,
-        BROWSER_SEARCH_YOUTUBE, BROWSER_SEARCH_GITHUB.
-  [Fix] _postprocess_result() réactivé — corrige AUDIO_PLAY → SCREEN_BRIGHTNESS
-        quand "luminosite" est dans la commande et la confiance est faible.
-  [Fix] _semantic_guard étendu — corrige aussi AUDIO_PLAY → SCREEN_BRIGHTNESS
-        et SCREEN_OFF → WINDOW_CLOSE pour "ferme/referme".
+  [B9]  Fallback keywords étendu — 25+ nouveaux patterns reconnus.
+  [Fix] _postprocess_result() réactivé.
+  [Fix] _semantic_guard étendu.
+
+CORRECTION 2 (audit semaines 1-5) :
+  _call_groq_ai() : restauration des messages "assistant" dans l'historique.
+  Avant : `if not content or role != "user": continue`  ← filtrait tout sauf user
+  Après : user ET assistant sont envoyés, avec troncature des réponses longues.
+  Impact : Groq comprend maintenant les références contextuelles ("le même",
+  "celui-là", "encore ça") car il voit les réponses précédentes de Jarvis.
+
+CORRECTION 3 (audit semaines 1-5) :
+  _postprocess_result() était défini mais jamais appelé.
+  Maintenant appelé à la fin de parse() et parse_with_context() après
+  _semantic_guard(), en dernière ligne de défense.
 """
 
 import json
@@ -40,6 +40,11 @@ from config.settings import (
 
 logger = get_logger(__name__)
 
+# Longueur max d'un message assistant injecté dans l'historique Groq.
+# Les réponses longues (listes de fichiers, rapport système) sont tronquées
+# pour ne pas polluer le contexte JSON strict du parser.
+_MAX_ASSISTANT_MSG_LEN = 200
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  CATALOGUE DES INTENTIONS
@@ -47,152 +52,148 @@ logger = get_logger(__name__)
 
 INTENTS = {
     # ── Système ───────────────────────────────────────────────────────────────
-    "SYSTEM_SHUTDOWN":     {"desc": "Éteindre l'ordinateur", "params": {"delay_seconds": "int"}},
-    "SYSTEM_RESTART":      {"desc": "Redémarrer l'ordinateur", "params": {"delay_seconds": "int"}},
-    "SYSTEM_SLEEP":        {"desc": "Mettre en veille", "params": {}},
-    "SYSTEM_HIBERNATE":    {"desc": "Mettre en hibernation", "params": {}},
-    "SYSTEM_LOCK":         {"desc": "Verrouiller l'écran", "params": {}},
-    "SYSTEM_UNLOCK":       {"desc": "Déverrouiller l'écran", "params": {}},
-    "SYSTEM_LOGOUT":       {"desc": "Déconnecter l'utilisateur", "params": {}},
-    "SYSTEM_TIME":         {"desc": "Donner l'heure et la date", "params": {"timezone": "str optionnel"}},
-    "SYSTEM_INFO":         {"desc": "Infos CPU, RAM, uptime", "params": {}},
-    "SYSTEM_DISK":         {"desc": "Infos disque et stockage", "params": {}},
-    "SYSTEM_PROCESSES":    {"desc": "Lister les processus", "params": {"sort_by": "str"}},
-    "SYSTEM_KILL_PROCESS": {"desc": "Fermer un processus", "params": {"target": "str"}},
-    "SYSTEM_NETWORK":      {"desc": "Infos réseau et IP", "params": {}},
-    "SYSTEM_TEMPERATURE":  {"desc": "Températures des composants", "params": {}},
-    "SYSTEM_FULL_REPORT":  {"desc": "Rapport système complet", "params": {}},
-    "SYSTEM_TASK_MANAGER": {"desc": "Ouvrir le gestionnaire des tâches", "params": {}},
-    "SYSTEM_CANCEL_SHUTDOWN": {"desc": "Annuler une extinction programmée", "params": {}},
-    "POWER_SLEEP":         {"desc": "Mettre le PC en veille", "params": {}},
-    "POWER_HIBERNATE":     {"desc": "Mettre le PC en hibernation", "params": {}},
-    "POWER_CANCEL":        {"desc": "Annuler extinction/redémarrage planifié", "params": {}},
-    "POWER_STATE":         {"desc": "Afficher l'état d'alimentation", "params": {}},
-    "SCREEN_UNLOCK":       {"desc": "Déverrouiller l'écran", "params": {"password": "str optionnel"}},
-    "SCREEN_OFF":          {"desc": "Éteindre l'écran sans verrouiller", "params": {}},
-    "WAKE_ON_LAN":         {"desc": "Réveiller un PC par Wake-on-LAN", "params": {"mac_address": "str"}},
+    "SYSTEM_SHUTDOWN":        {"desc": "Éteindre l'ordinateur",              "params": {"delay_seconds": "int"}},
+    "SYSTEM_RESTART":         {"desc": "Redémarrer l'ordinateur",            "params": {"delay_seconds": "int"}},
+    "SYSTEM_SLEEP":           {"desc": "Mettre en veille",                   "params": {}},
+    "SYSTEM_HIBERNATE":       {"desc": "Mettre en hibernation",              "params": {}},
+    "SYSTEM_LOCK":            {"desc": "Verrouiller l'écran",                "params": {}},
+    "SYSTEM_UNLOCK":          {"desc": "Déverrouiller l'écran",              "params": {}},
+    "SYSTEM_LOGOUT":          {"desc": "Déconnecter l'utilisateur",          "params": {}},
+    "SYSTEM_TIME":            {"desc": "Donner l'heure et la date",          "params": {"timezone": "str optionnel"}},
+    "SYSTEM_INFO":            {"desc": "Infos CPU, RAM, uptime",             "params": {}},
+    "SYSTEM_DISK":            {"desc": "Infos disque et stockage",           "params": {}},
+    "SYSTEM_PROCESSES":       {"desc": "Lister les processus",               "params": {"sort_by": "str"}},
+    "SYSTEM_KILL_PROCESS":    {"desc": "Fermer un processus",                "params": {"target": "str"}},
+    "SYSTEM_NETWORK":         {"desc": "Infos réseau et IP",                 "params": {}},
+    "SYSTEM_TEMPERATURE":     {"desc": "Températures des composants",        "params": {}},
+    "SYSTEM_FULL_REPORT":     {"desc": "Rapport système complet",            "params": {}},
+    "SYSTEM_TASK_MANAGER":    {"desc": "Ouvrir le gestionnaire des tâches",  "params": {}},
+    "SYSTEM_CANCEL_SHUTDOWN": {"desc": "Annuler une extinction programmée",  "params": {}},
+    "POWER_SLEEP":            {"desc": "Mettre le PC en veille",             "params": {}},
+    "POWER_HIBERNATE":        {"desc": "Mettre le PC en hibernation",        "params": {}},
+    "POWER_CANCEL":           {"desc": "Annuler extinction/redémarrage planifié", "params": {}},
+    "POWER_STATE":            {"desc": "Afficher l'état d'alimentation",     "params": {}},
+    "SCREEN_UNLOCK":          {"desc": "Déverrouiller l'écran",              "params": {"password": "str optionnel"}},
+    "SCREEN_OFF":             {"desc": "Éteindre l'écran sans verrouiller",  "params": {}},
+    "WAKE_ON_LAN":            {"desc": "Réveiller un PC par Wake-on-LAN",    "params": {"mac_address": "str"}},
 
     # ── Réseau ────────────────────────────────────────────────────────────────
-    "WIFI_LIST":       {"desc": "Lister les réseaux Wi-Fi", "params": {}},
-    "WIFI_CONNECT":    {"desc": "Se connecter à un réseau Wi-Fi", "params": {"ssid": "str", "password": "str optionnel"}},
-    "WIFI_DISCONNECT": {"desc": "Se déconnecter du Wi-Fi", "params": {}},
-    "WIFI_ENABLE":     {"desc": "Activer le Wi-Fi", "params": {}},
-    "WIFI_DISABLE":    {"desc": "Désactiver le Wi-Fi", "params": {}},
-    "BLUETOOTH_ENABLE":  {"desc": "Activer Bluetooth", "params": {}},
-    "BLUETOOTH_DISABLE": {"desc": "Désactiver Bluetooth", "params": {}},
-    "BLUETOOTH_LIST":    {"desc": "Lister les appareils Bluetooth", "params": {}},
-    "NETWORK_INFO":      {"desc": "Afficher les informations réseau", "params": {}},
+    "WIFI_LIST":        {"desc": "Lister les réseaux Wi-Fi",                 "params": {}},
+    "WIFI_CONNECT":     {"desc": "Se connecter à un réseau Wi-Fi",           "params": {"ssid": "str", "password": "str optionnel"}},
+    "WIFI_DISCONNECT":  {"desc": "Se déconnecter du Wi-Fi",                  "params": {}},
+    "WIFI_ENABLE":      {"desc": "Activer le Wi-Fi",                         "params": {}},
+    "WIFI_DISABLE":     {"desc": "Désactiver le Wi-Fi",                      "params": {}},
+    "BLUETOOTH_ENABLE": {"desc": "Activer Bluetooth",                        "params": {}},
+    "BLUETOOTH_DISABLE":{"desc": "Désactiver Bluetooth",                     "params": {}},
+    "BLUETOOTH_LIST":   {"desc": "Lister les appareils Bluetooth",           "params": {}},
+    "NETWORK_INFO":     {"desc": "Afficher les informations réseau",         "params": {}},
 
     # ── Applications ──────────────────────────────────────────────────────────
-    "APP_OPEN":         {"desc": "Ouvrir une application", "params": {"app_name": "str", "args": "list"}},
-    "APP_CLOSE":        {"desc": "Fermer une application", "params": {"app_name": "str"}},
-    "APP_RESTART":      {"desc": "Redémarrer une application", "params": {"app_name": "str"}},
-    "APP_CHECK":        {"desc": "Vérifier si une application est ouverte", "params": {"app_name": "str"}},
-    "APP_LIST_RUNNING": {"desc": "Lister les applications ouvertes", "params": {}},
-    "APP_LIST_KNOWN":   {"desc": "Lister les applications connues", "params": {}},
+    "APP_OPEN":         {"desc": "Ouvrir une application",                   "params": {"app_name": "str", "args": "list"}},
+    "APP_CLOSE":        {"desc": "Fermer une application",                   "params": {"app_name": "str"}},
+    "APP_RESTART":      {"desc": "Redémarrer une application",               "params": {"app_name": "str"}},
+    "APP_CHECK":        {"desc": "Vérifier si une application est ouverte",  "params": {"app_name": "str"}},
+    "APP_LIST_RUNNING": {"desc": "Lister les applications ouvertes",         "params": {}},
+    "APP_LIST_KNOWN":   {"desc": "Lister les applications connues",          "params": {}},
 
     # ── Fichiers & Dossiers ───────────────────────────────────────────────────
-    "FILE_SEARCH":         {"desc": "Rechercher un fichier par nom", "params": {"query": "str", "search_dirs": "list optionnel"}},
-    "FILE_SEARCH_TYPE":    {"desc": "Rechercher des fichiers par type", "params": {"extension": "str"}},
-    "FILE_SEARCH_CONTENT": {"desc": "Rechercher un mot dans les fichiers", "params": {"keyword": "str"}},
-    "FILE_OPEN":           {"desc": "Ouvrir un fichier", "params": {"path": "str", "target_type": "str optionnel"}},
-    "FILE_CLOSE":          {"desc": "Fermer un fichier ouvert", "params": {"path": "str"}},
-    "FILE_COPY":           {"desc": "Copier un fichier", "params": {"src": "str", "dst": "str"}},
-    "FILE_MOVE":           {"desc": "Déplacer un fichier", "params": {"src": "str", "dst": "str"}},
-    "FILE_RENAME":         {"desc": "Renommer un fichier", "params": {"path": "str", "new_name": "str"}},
-    "FILE_DELETE":         {"desc": "Supprimer un fichier", "params": {"path": "str"}},
-    "FILE_INFO":           {"desc": "Informations sur un fichier", "params": {"path": "str"}},
-    "FOLDER_LIST":         {"desc": "Lister le contenu d'un dossier", "params": {"path": "str"}},
-    "FOLDER_CREATE":       {"desc": "Créer un dossier", "params": {"path": "str"}},
-    "WINDOW_CLOSE":        {"desc": "Fermer une fenêtre ouverte", "params": {"query": "str"}},
+    "FILE_SEARCH":         {"desc": "Rechercher un fichier par nom",         "params": {"query": "str", "search_dirs": "list optionnel"}},
+    "FILE_SEARCH_TYPE":    {"desc": "Rechercher des fichiers par type",      "params": {"extension": "str"}},
+    "FILE_SEARCH_CONTENT": {"desc": "Rechercher un mot dans les fichiers",   "params": {"keyword": "str"}},
+    "FILE_OPEN":           {"desc": "Ouvrir un fichier",                     "params": {"path": "str", "target_type": "str optionnel"}},
+    "FILE_CLOSE":          {"desc": "Fermer un fichier ouvert",              "params": {"path": "str"}},
+    "FILE_COPY":           {"desc": "Copier un fichier",                     "params": {"src": "str", "dst": "str"}},
+    "FILE_MOVE":           {"desc": "Déplacer un fichier",                   "params": {"src": "str", "dst": "str"}},
+    "FILE_RENAME":         {"desc": "Renommer un fichier",                   "params": {"path": "str", "new_name": "str"}},
+    "FILE_DELETE":         {"desc": "Supprimer un fichier",                  "params": {"path": "str"}},
+    "FILE_INFO":           {"desc": "Informations sur un fichier",           "params": {"path": "str"}},
+    "FOLDER_LIST":         {"desc": "Lister le contenu d'un dossier",        "params": {"path": "str"}},
+    "FOLDER_CREATE":       {"desc": "Créer un dossier",                      "params": {"path": "str"}},
+    "WINDOW_CLOSE":        {"desc": "Fermer une fenêtre ouverte",            "params": {"query": "str"}},
 
     # ── Navigateur ────────────────────────────────────────────────────────────
-    "BROWSER_OPEN":           {"desc": "Ouvrir le navigateur", "params": {"url": "str optionnel"}},
-    "BROWSER_CLOSE":          {"desc": "Fermer le navigateur", "params": {}},
-    "BROWSER_URL":            {"desc": "Ouvrir une URL", "params": {"url": "str"}},
-    "BROWSER_NEW_TAB":        {"desc": "Ouvrir un nouvel onglet", "params": {"url": "str optionnel"}},
-    "BROWSER_BACK":           {"desc": "Page précédente", "params": {}},
-    "BROWSER_FORWARD":        {"desc": "Page suivante", "params": {}},
-    "BROWSER_RELOAD":         {"desc": "Recharger la page", "params": {}},
-    "BROWSER_CLOSE_TAB":      {"desc": "Fermer un onglet", "params": {"index": "int optionnel"}},
-    "BROWSER_SEARCH":         {"desc": "Rechercher sur le web", "params": {"query": "str", "engine": "str optionnel"}},
-    "BROWSER_SEARCH_YOUTUBE": {"desc": "Chercher sur YouTube", "params": {"query": "str"}},
-    "BROWSER_SEARCH_GITHUB":  {"desc": "Chercher sur GitHub", "params": {"query": "str"}},
-    "BROWSER_OPEN_RESULT":    {"desc": "Ouvrir un résultat de recherche", "params": {"rank": "int"}},
-    "BROWSER_LIST_RESULTS":   {"desc": "Lister les résultats de recherche", "params": {}},
-    "BROWSER_GO_TO_SITE":     {"desc": "Naviguer vers un site connu", "params": {"site": "str", "query": "str optionnel"}},
-    "BROWSER_NAVIGATE":       {"desc": "Naviguer vers une URL", "params": {"url": "str"}},
-    "BROWSER_READ":           {"desc": "Lire le contenu de la page", "params": {}},
-    "BROWSER_PAGE_INFO":      {"desc": "Titre et URL de la page active", "params": {}},
-    "BROWSER_EXTRACT_LINKS":  {"desc": "Extraire les liens de la page", "params": {}},
-    "BROWSER_SUMMARIZE":      {"desc": "Résumer la page active via IA", "params": {}},
-    "BROWSER_SCROLL":         {"desc": "Scroller la page", "params": {"direction": "str"}},
-    "BROWSER_CLICK_TEXT":     {"desc": "Cliquer sur un élément", "params": {"text": "str"}},
-    "BROWSER_FILL_FIELD":     {"desc": "Remplir un champ de formulaire", "params": {"selector": "str", "value": "str"}},
-    "BROWSER_TYPE":           {"desc": "Taper du texte dans la page", "params": {"text": "str"}},
-    "BROWSER_DOWNLOAD":       {"desc": "Télécharger un fichier", "params": {"url": "str optionnel"}},
-    "BROWSER_LIST_TABS":      {"desc": "Lister les onglets ouverts", "params": {}},
-    "BROWSER_SWITCH_TAB":     {"desc": "Basculer sur un onglet", "params": {"index": "int optionnel"}},
+    "BROWSER_OPEN":           {"desc": "Ouvrir le navigateur",               "params": {"url": "str optionnel"}},
+    "BROWSER_CLOSE":          {"desc": "Fermer le navigateur",               "params": {}},
+    "BROWSER_URL":            {"desc": "Ouvrir une URL",                     "params": {"url": "str"}},
+    "BROWSER_NEW_TAB":        {"desc": "Ouvrir un nouvel onglet",            "params": {"url": "str optionnel"}},
+    "BROWSER_BACK":           {"desc": "Page précédente",                    "params": {}},
+    "BROWSER_FORWARD":        {"desc": "Page suivante",                      "params": {}},
+    "BROWSER_RELOAD":         {"desc": "Recharger la page",                  "params": {}},
+    "BROWSER_CLOSE_TAB":      {"desc": "Fermer un onglet",                   "params": {"index": "int optionnel"}},
+    "BROWSER_SEARCH":         {"desc": "Rechercher sur le web",              "params": {"query": "str", "engine": "str optionnel"}},
+    "BROWSER_SEARCH_YOUTUBE": {"desc": "Chercher sur YouTube",               "params": {"query": "str"}},
+    "BROWSER_SEARCH_GITHUB":  {"desc": "Chercher sur GitHub",                "params": {"query": "str"}},
+    "BROWSER_OPEN_RESULT":    {"desc": "Ouvrir un résultat de recherche",    "params": {"rank": "int"}},
+    "BROWSER_LIST_RESULTS":   {"desc": "Lister les résultats de recherche",  "params": {}},
+    "BROWSER_GO_TO_SITE":     {"desc": "Naviguer vers un site connu",        "params": {"site": "str", "query": "str optionnel"}},
+    "BROWSER_NAVIGATE":       {"desc": "Naviguer vers une URL",              "params": {"url": "str"}},
+    "BROWSER_READ":           {"desc": "Lire le contenu de la page",         "params": {}},
+    "BROWSER_PAGE_INFO":      {"desc": "Titre et URL de la page active",     "params": {}},
+    "BROWSER_EXTRACT_LINKS":  {"desc": "Extraire les liens de la page",      "params": {}},
+    "BROWSER_SUMMARIZE":      {"desc": "Résumer la page active via IA",      "params": {}},
+    "BROWSER_SCROLL":         {"desc": "Scroller la page",                   "params": {"direction": "str"}},
+    "BROWSER_CLICK_TEXT":     {"desc": "Cliquer sur un élément",             "params": {"text": "str"}},
+    "BROWSER_FILL_FIELD":     {"desc": "Remplir un champ de formulaire",     "params": {"selector": "str", "value": "str"}},
+    "BROWSER_TYPE":           {"desc": "Taper du texte dans la page",        "params": {"text": "str"}},
+    "BROWSER_DOWNLOAD":       {"desc": "Télécharger un fichier",             "params": {"url": "str optionnel"}},
+    "BROWSER_LIST_TABS":      {"desc": "Lister les onglets ouverts",         "params": {}},
+    "BROWSER_SWITCH_TAB":     {"desc": "Basculer sur un onglet",             "params": {"index": "int optionnel"}},
     "BROWSER_FIND_AND_OPEN":  {"desc": "Trouver le meilleur résultat et l'ouvrir", "params": {"query": "str"}},
-    "BROWSER_CONTEXT":        {"desc": "État actuel du navigateur", "params": {}},
+    "BROWSER_CONTEXT":        {"desc": "État actuel du navigateur",          "params": {}},
 
     # ── Audio ─────────────────────────────────────────────────────────────────
-    "AUDIO_VOLUME_UP":   {"desc": "Monter le volume", "params": {"step": "int"}},
-    "AUDIO_VOLUME_DOWN": {"desc": "Baisser le volume", "params": {"step": "int"}},
-    "AUDIO_VOLUME_SET":  {"desc": "Définir le volume", "params": {"level": "int 0-100"}},
-    "AUDIO_MUTE":        {"desc": "Couper/rétablir le son", "params": {}},
-    "AUDIO_PLAY":        {"desc": "Jouer une musique locale", "params": {"query": "str"}},
+    "AUDIO_VOLUME_UP":   {"desc": "Monter le volume",                        "params": {"step": "int"}},
+    "AUDIO_VOLUME_DOWN": {"desc": "Baisser le volume",                       "params": {"step": "int"}},
+    "AUDIO_VOLUME_SET":  {"desc": "Définir le volume",                       "params": {"level": "int 0-100"}},
+    "AUDIO_MUTE":        {"desc": "Couper/rétablir le son",                  "params": {}},
+    "AUDIO_PLAY":        {"desc": "Jouer une musique locale",                "params": {"query": "str"}},
 
-    # ── [B8] Musique — Module complet (semaine 3) ─────────────────────────────
-    "MUSIC_PLAY":             {"desc": "Jouer une musique, chanson ou artiste", "params": {"query": "str, titre ou artiste ou playlist"}},
-    "MUSIC_PAUSE":            {"desc": "Mettre la musique en pause", "params": {}},
-    "MUSIC_RESUME":           {"desc": "Reprendre la lecture musicale", "params": {}},
-    "MUSIC_STOP":             {"desc": "Arrêter complètement la musique", "params": {}},
-    "MUSIC_NEXT":             {"desc": "Passer à la musique suivante", "params": {}},
-    "MUSIC_PREV":             {"desc": "Revenir à la musique précédente", "params": {}},
-    "MUSIC_VOLUME":           {"desc": "Régler le volume de la musique", "params": {"level": "int 0-100"}},
-    "MUSIC_SHUFFLE":          {"desc": "Activer/désactiver lecture aléatoire", "params": {}},
-    "MUSIC_REPEAT":           {"desc": "Activer/désactiver répétition", "params": {}},
-    "MUSIC_CURRENT":          {"desc": "Quelle musique joue en ce moment", "params": {}},
-    "MUSIC_PLAYLIST_CREATE":  {"desc": "Créer une playlist", "params": {"name": "str"}},
-    "MUSIC_PLAYLIST_PLAY":    {"desc": "Jouer une playlist", "params": {"name": "str"}},
-    "MUSIC_PLAYLIST_LIST":    {"desc": "Lister les playlists disponibles", "params": {}},
-    "MUSIC_LIBRARY_SCAN":     {"desc": "Scanner la bibliothèque musicale", "params": {"path": "str optionnel"}},
+    # ── [B8] Musique ──────────────────────────────────────────────────────────
+    "MUSIC_PLAY":            {"desc": "Jouer une musique, chanson ou artiste", "params": {"query": "str, titre ou artiste ou playlist"}},
+    "MUSIC_PAUSE":           {"desc": "Mettre la musique en pause",           "params": {}},
+    "MUSIC_RESUME":          {"desc": "Reprendre la lecture musicale",        "params": {}},
+    "MUSIC_STOP":            {"desc": "Arrêter complètement la musique",      "params": {}},
+    "MUSIC_NEXT":            {"desc": "Passer à la musique suivante",         "params": {}},
+    "MUSIC_PREV":            {"desc": "Revenir à la musique précédente",      "params": {}},
+    "MUSIC_VOLUME":          {"desc": "Régler le volume de la musique",       "params": {"level": "int 0-100"}},
+    "MUSIC_SHUFFLE":         {"desc": "Activer/désactiver lecture aléatoire", "params": {}},
+    "MUSIC_REPEAT":          {"desc": "Activer/désactiver répétition",        "params": {}},
+    "MUSIC_CURRENT":         {"desc": "Quelle musique joue en ce moment",    "params": {}},
+    "MUSIC_PLAYLIST_CREATE": {"desc": "Créer une playlist",                   "params": {"name": "str"}},
+    "MUSIC_PLAYLIST_PLAY":   {"desc": "Jouer une playlist",                   "params": {"name": "str"}},
+    "MUSIC_PLAYLIST_LIST":   {"desc": "Lister les playlists disponibles",     "params": {}},
+    "MUSIC_LIBRARY_SCAN":    {"desc": "Scanner la bibliothèque musicale",     "params": {"path": "str optionnel"}},
 
     # ── Documents ─────────────────────────────────────────────────────────────
-    "DOC_READ":        {"desc": "Lire un document Word ou PDF", "params": {"path": "str"}},
-    "DOC_SUMMARIZE":   {"desc": "Résumer un document", "params": {"path": "str"}},
-    "DOC_SEARCH_WORD": {"desc": "Chercher un mot dans un document", "params": {"path": "str", "keyword": "str"}},
+    "DOC_READ":        {"desc": "Lire un document Word ou PDF",              "params": {"path": "str"}},
+    "DOC_SUMMARIZE":   {"desc": "Résumer un document",                       "params": {"path": "str"}},
+    "DOC_SEARCH_WORD": {"desc": "Chercher un mot dans un document",          "params": {"path": "str", "keyword": "str"}},
 
     # ── Écran ─────────────────────────────────────────────────────────────────
-    "SCREEN_CAPTURE":      {"desc": "Capture d'écran", "params": {}},
-    "SCREENSHOT_TO_PHONE": {"desc": "Envoyer une capture au téléphone", "params": {}},
-    "SCREEN_BRIGHTNESS":   {"desc": "Régler la luminosité", "params": {"level": "int 0-100"}},
-    "SCREEN_INFO":         {"desc": "Infos sur l'écran (résolution, etc.)", "params": {}},
-    "SCREEN_RECORD":       {"desc": "Enregistrer l'écran", "params": {}},
+    "SCREEN_CAPTURE":      {"desc": "Capture d'écran",                       "params": {}},
+    "SCREENSHOT_TO_PHONE": {"desc": "Envoyer une capture au téléphone",      "params": {}},
+    "SCREEN_BRIGHTNESS":   {"desc": "Régler la luminosité",                  "params": {"level": "int 0-100"}},
+    "SCREEN_INFO":         {"desc": "Infos sur l'écran (résolution, etc.)",  "params": {}},
+    "SCREEN_RECORD":       {"desc": "Enregistrer l'écran",                   "params": {}},
 
     # ── Historique / Macros ───────────────────────────────────────────────────
-    "REPEAT_LAST":    {"desc": "Répéter la dernière commande", "params": {}},
-    "HISTORY_SHOW":   {"desc": "Afficher l'historique des commandes", "params": {"count": "int optionnel"}},
-    "HISTORY_CLEAR":  {"desc": "Effacer l'historique", "params": {}},
-    "HISTORY_SEARCH": {"desc": "Chercher dans l'historique", "params": {"keyword": "str"}},
-    "MACRO_RUN":      {"desc": "Lancer une macro nommée", "params": {"name": "str"}},
-    "MACRO_LIST":     {"desc": "Lister les macros disponibles", "params": {}},
-    "MACRO_SAVE":     {"desc": "Créer/sauvegarder une macro", "params": {"name": "str", "commands": "list"}},
-    "MACRO_DELETE":   {"desc": "Supprimer une macro", "params": {"name": "str"}},
+    "REPEAT_LAST":    {"desc": "Répéter la dernière commande",               "params": {}},
+    "HISTORY_SHOW":   {"desc": "Afficher l'historique des commandes",        "params": {"count": "int optionnel"}},
+    "HISTORY_CLEAR":  {"desc": "Effacer l'historique",                       "params": {}},
+    "HISTORY_SEARCH": {"desc": "Chercher dans l'historique",                 "params": {"keyword": "str"}},
+    "MACRO_RUN":      {"desc": "Lancer une macro nommée",                    "params": {"name": "str"}},
+    "MACRO_LIST":     {"desc": "Lister les macros disponibles",              "params": {}},
+    "MACRO_SAVE":     {"desc": "Créer/sauvegarder une macro",                "params": {"name": "str", "commands": "list"}},
+    "MACRO_DELETE":   {"desc": "Supprimer une macro",                        "params": {"name": "str"}},
 
-    "GREETING":    {"desc": "Salutation ou message d'accueil", "params": {}},
-    "MEMORY_SHOW": {"desc": "Afficher ce dont Jarvis se souvient", "params": {}},
+    "GREETING":     {"desc": "Salutation ou message d'accueil",              "params": {}},
+    "MEMORY_SHOW":  {"desc": "Afficher ce dont Jarvis se souvient",          "params": {}},
     "KNOWLEDGE_QA": {"desc": "Question de connaissance générale, réponse directe sans action système", "params": {}},
-
-    "INCOMPLETE": {
-        "desc": "Commande incomplète — paramètre manquant",
-        "params": {"missing": "str", "suggested_intent": "str"},
-    },
+    "INCOMPLETE":   {"desc": "Commande incomplète — paramètre manquant",     "params": {"missing": "str", "suggested_intent": "str"}},
 
     # ── Aide / Inconnu ────────────────────────────────────────────────────────
-    "HELP":    {"desc": "Afficher l'aide et les commandes disponibles", "params": {}},
-    "UNKNOWN": {"desc": "Intention non reconnue", "params": {}},
+    "HELP":    {"desc": "Afficher l'aide et les commandes disponibles",      "params": {}},
+    "UNKNOWN": {"desc": "Intention non reconnue",                            "params": {}},
 }
 
 
@@ -201,23 +202,28 @@ INTENTS = {
 # ══════════════════════════════════════════════════════════════════════════════
 
 FEW_SHOT_EXAMPLES = [
-    ("mets chrome", '{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]},"confidence":0.99,"response_message":"Je lance Chrome tout de suite."}'),
-    ("monte le son un peu", '{"intent":"AUDIO_VOLUME_UP","params":{"step":10},"confidence":0.98,"response_message":"Volume monté de 10%."}'),
-    ("mets le volume à 70", '{"intent":"AUDIO_VOLUME_SET","params":{"level":70},"confidence":0.99,"response_message":"Volume réglé à 70%."}'),
+    ("mets chrome",                       '{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]},"confidence":0.99,"response_message":"Je lance Chrome tout de suite."}'),
+    ("monte le son un peu",               '{"intent":"AUDIO_VOLUME_UP","params":{"step":10},"confidence":0.98,"response_message":"Volume monté de 10%."}'),
+    ("mets le volume à 70",               '{"intent":"AUDIO_VOLUME_SET","params":{"level":70},"confidence":0.99,"response_message":"Volume réglé à 70%."}'),
     ("cherche les dernières nouvelles sur python", '{"intent":"BROWSER_SEARCH","params":{"query":"dernières nouvelles python"},"confidence":0.98,"response_message":"Je lance la recherche."}'),
-    ("éteins l\'ordi dans 5 minutes", '{"intent":"SYSTEM_SHUTDOWN","params":{"delay_seconds":300},"confidence":0.99,"response_message":"J\'éteins le PC dans 5 minutes."}'),
-    ("coupe le son", '{"intent":"AUDIO_MUTE","params":{},"confidence":0.99,"response_message":"Son coupé."}'),
-    ("ouvre mes documents", '{"intent":"FOLDER_LIST","params":{"path":"Documents"},"confidence":0.97,"response_message":"J\'ouvre ton dossier Documents."}'),
+    ("éteins l\'ordi dans 5 minutes",    '{"intent":"SYSTEM_SHUTDOWN","params":{"delay_seconds":300},"confidence":0.99,"response_message":"J\'éteins le PC dans 5 minutes."}'),
+    ("coupe le son",                      '{"intent":"AUDIO_MUTE","params":{},"confidence":0.99,"response_message":"Son coupé."}'),
+    ("ouvre mes documents",               '{"intent":"FOLDER_LIST","params":{"path":"Documents"},"confidence":0.97,"response_message":"J\'ouvre ton dossier Documents."}'),
     ("va sur youtube et cherche Python tutorial", '{"intent":"BROWSER_GO_TO_SITE","params":{"site":"youtube","query":"Python tutorial"},"confidence":0.99,"response_message":"Je cherche Python tutorial sur YouTube."}'),
-    ("referme là", '{"intent":"WINDOW_CLOSE","params":{"query":""},"confidence":0.97,"response_message":"Je ferme la fenêtre."}'),
-    ("joue la playlist chill", '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"chill"},"confidence":0.98,"response_message":"Je lance la playlist chill."}'),
-    ("musique suivante", '{"intent":"MUSIC_NEXT","params":{},"confidence":0.99,"response_message":"Piste suivante."}'),
-    ("luminosité à 70%", '{"intent":"SCREEN_BRIGHTNESS","params":{"level":70},"confidence":0.99,"response_message":"Luminosité réglée à 70%."}'),
-    ("mode nuit", '{"intent":"MACRO_RUN","params":{"name":"mode nuit"},"confidence":0.98,"response_message":"Je lance la macro mode nuit."}'),
-    ("répète la dernière commande", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
-    ("liste les réseaux wifi", '{"intent":"WIFI_LIST","params":{},"confidence":0.99,"response_message":"Je cherche les réseaux Wi-Fi disponibles."}'),
+    ("referme là",                        '{"intent":"WINDOW_CLOSE","params":{"query":""},"confidence":0.97,"response_message":"Je ferme la fenêtre."}'),
+    ("joue la playlist chill",            '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"chill"},"confidence":0.98,"response_message":"Je lance la playlist chill."}'),
+    ("musique suivante",                  '{"intent":"MUSIC_NEXT","params":{},"confidence":0.99,"response_message":"Piste suivante."}'),
+    ("luminosité à 70%",                  '{"intent":"SCREEN_BRIGHTNESS","params":{"level":70},"confidence":0.99,"response_message":"Luminosité réglée à 70%."}'),
+    ("mode nuit",                         '{"intent":"MACRO_RUN","params":{"name":"mode nuit"},"confidence":0.98,"response_message":"Je lance la macro mode nuit."}'),
+    ("répète la dernière commande",       '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
+    ("liste les réseaux wifi",            '{"intent":"WIFI_LIST","params":{},"confidence":0.99,"response_message":"Je cherche les réseaux Wi-Fi disponibles."}'),
     ("donne moi les infos sur mon système", '{"intent":"SYSTEM_INFO","params":{},"confidence":0.99,"response_message":"Je récupère les informations système."}'),
     ("il me reste combien d'espace disque", '{"intent":"SYSTEM_DISK","params":{},"confidence":0.99,"response_message":"Je vérifie l\'espace disque disponible."}'),
+    # [Bug6] Few-shots explicites pour REPEAT_LAST — évite la confusion avec MEMORY_SHOW
+    ("répète la dernière commande", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
+    ("rejoue la commande précédente", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je relance la commande précédente."}'),
+    ("refais la même chose", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je relance la même action."}'),
+    ("encore une fois", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète."}'),
 ]
 
 
@@ -232,8 +238,8 @@ class CommandParser:
     """
 
     def __init__(self):
-        self.client       = None
-        self.ai_available = False
+        self.client           = None
+        self.ai_available     = False
         self._groq_cooldown_until = 0.0
         self._init_client()
 
@@ -249,7 +255,7 @@ class CommandParser:
         if m:
             minutes = float(m.group(1) or 0)
             seconds = float(m.group(2) or 0)
-            wait_s = (minutes * 60.0) + seconds
+            wait_s  = (minutes * 60.0) + seconds
         self._groq_cooldown_until = time.time() + wait_s
         logger.warning(f"Groq cooldown parser ~{int(wait_s)}s (fallback actif).")
 
@@ -274,10 +280,10 @@ class CommandParser:
             start  = time.time()
             result = self.parse("test de connexion")
             return {
-                "available":  True,
-                "message":    "Groq opérationnel.",
-                "latency_ms": int((time.time() - start) * 1000),
-                "model":      GROQ_MODEL_NAME,
+                "available":   True,
+                "message":     "Groq opérationnel.",
+                "latency_ms":  int((time.time() - start) * 1000),
+                "model":       GROQ_MODEL_NAME,
                 "test_result": result,
             }
         except Exception as e:
@@ -298,13 +304,14 @@ class CommandParser:
                 try:
                     result           = self._call_groq_ai(command, history=[])
                     result           = self._semantic_guard(command, result)
+                    # [C3] _postprocess_result appelé en dernière ligne de défense
+                    result           = self._postprocess_result(command, result)
                     result["source"] = "groq"
                     logger.info(f"Intent: {result['intent']} (conf={result['confidence']:.2f}, src=groq)")
                     return result
                 except Exception as e:
                     logger.warning(f"Groq tentative {attempt + 1} échouée : {e}")
                     self._set_groq_cooldown_from_error(e)
-                    # Erreur structurelle de sortie JSON: inutile de retenter plusieurs fois.
                     if "json_validate_failed" in str(e):
                         break
                     if time.time() < self._groq_cooldown_until:
@@ -313,6 +320,8 @@ class CommandParser:
                         time.sleep(0.5 * (attempt + 1))
 
         result           = self._semantic_guard(command, self._fallback_keywords(command))
+        # [C3] _postprocess_result appelé aussi sur le fallback
+        result           = self._postprocess_result(command, result)
         result["source"] = "fallback"
         return result
 
@@ -327,13 +336,14 @@ class CommandParser:
                 try:
                     result           = self._call_groq_ai(command, history=history or [])
                     result           = self._semantic_guard(command, result)
+                    # [C3] _postprocess_result appelé en dernière ligne de défense
+                    result           = self._postprocess_result(command, result)
                     result["source"] = "groq"
                     logger.info(f"Intent: {result['intent']} (conf={result['confidence']:.2f}, src=groq+ctx)")
                     return result
                 except Exception as e:
                     logger.warning(f"Groq+ctx tentative {attempt + 1} échouée : {e}")
                     self._set_groq_cooldown_from_error(e)
-                    # Erreur structurelle de sortie JSON: inutile de retenter plusieurs fois.
                     if "json_validate_failed" in str(e):
                         break
                     if time.time() < self._groq_cooldown_until:
@@ -342,16 +352,32 @@ class CommandParser:
                         time.sleep(0.5 * (attempt + 1))
 
         result           = self._semantic_guard(command, self._fallback_keywords(command))
+        # [C3] _postprocess_result appelé aussi sur le fallback
+        result           = self._postprocess_result(command, result)
         result["source"] = "fallback"
         return result
 
     # ──────────────────────────────────────────────────────────────────────────
-    #  APPEL GROQ
+    #  APPEL GROQ — [C2] CORRIGÉ
     # ──────────────────────────────────────────────────────────────────────────
 
     def _call_groq_ai(self, command: str, history: list = None) -> dict:
+        """
+        Construit les messages et appelle Groq.
+
+        [C2] CORRECTION : L'historique envoie maintenant user ET assistant.
+        Avant : seuls les messages role="user" étaient inclus.
+              → Groq ne voyait jamais les réponses de Jarvis.
+              → Les références contextuelles ("le même", "encore", "celui-là")
+                étaient non résolues car Groq ignorait ce qui avait été dit.
+        Après : user et assistant alternent correctement.
+              → Les réponses assistant longues sont tronquées à
+                _MAX_ASSISTANT_MSG_LEN caractères pour ne pas polluer
+                le contexte JSON strict du parser d'intent.
+        """
         memory_summary = ""
         history_to_use = []
+
         if history:
             for msg in history:
                 if msg.get("role") == "system" and msg.get("memory"):
@@ -359,26 +385,40 @@ class CommandParser:
                 else:
                     history_to_use.append(msg)
         else:
-            history_to_use = history or []
+            history_to_use = []
 
+        # ── Construction des messages ─────────────────────────────────────────
         messages = [{"role": "system", "content": self._build_system_prompt(memory_summary)}]
 
+        # Few-shot examples (toujours en tête pour ancrer le format JSON)
         for user_msg, assistant_msg in FEW_SHOT_EXAMPLES[:8]:
             messages.append({"role": "user",      "content": user_msg})
             messages.append({"role": "assistant", "content": assistant_msg})
 
+        # [C2] Historique : inclure user ET assistant, pas seulement user
         if history_to_use:
-            # Pour le parsing d'intent, on limite le bruit: prioriser les messages user.
-            # Les réponses assistant détaillées peuvent perturber la génération JSON stricte.
             for msg in history_to_use[-12:]:
-                role = msg.get("role", "user")
+                role    = msg.get("role", "user")
                 content = str(msg.get("content", "")).strip()
-                if not content or role != "user":
-                    continue
-                messages.append({"role": "user", "content": content})
 
+                # Ignorer les messages vides ou les rôles inconnus
+                if not content or role not in ("user", "assistant"):
+                    continue
+
+                # [C2] Tronquer les messages assistant trop longs.
+                # Les réponses qui contiennent des listes (fichiers, processus,
+                # rapport système) peuvent faire plusieurs centaines de caractères.
+                # On garde seulement le début — suffisant pour que Groq comprenne
+                # le contexte sans être perturbé dans sa génération JSON stricte.
+                if role == "assistant" and len(content) > _MAX_ASSISTANT_MSG_LEN:
+                    content = content[:_MAX_ASSISTANT_MSG_LEN] + "…"
+
+                messages.append({"role": role, "content": content})
+
+        # Commande courante — toujours en dernier
         messages.append({"role": "user", "content": command})
 
+        # ── Appel API ─────────────────────────────────────────────────────────
         response = self.client.chat.completions.create(
             model=GROQ_MODEL_NAME,
             messages=messages,
@@ -431,12 +471,12 @@ RÈGLES :
 11. Si la requête est une question de connaissance générale (définition, explication, comparaison,
     culture générale, raisonnement) et ne demande pas d'action sur le PC → KNOWLEDGE_QA.
 12. Pour KNOWLEDGE_QA, donne la réponse directement dans `response_message`.
-11. SORTIE STRICTE : retourne UNIQUEMENT un objet JSON avec EXACTEMENT ces clés
+13. SORTIE STRICTE : retourne UNIQUEMENT un objet JSON avec EXACTEMENT ces clés
     `intent`, `params`, `confidence`, `response_message`.
-12. INTERDIT de retourner des objets métier (`cpu`, `ram`, `disk`, `system_info`, etc.).
-13. `params` doit être un objet JSON ({{}} si vide), jamais du texte.
-14. `confidence` doit être un nombre entre 0 et 1.
-15. Si la demande concerne l'état/infos du système PC → `intent` = `SYSTEM_INFO`.
+14. INTERDIT de retourner des objets métier (`cpu`, `ram`, `disk`, `system_info`, etc.).
+15. `params` doit être un objet JSON ({{}} si vide), jamais du texte.
+16. `confidence` doit être un nombre entre 0 et 1.
+17. Si la demande concerne l'état/infos du système PC → `intent` = `SYSTEM_INFO`.
 
 FORMAT (JSON uniquement) :
 {{"intent": "NOM", "params": {{}}, "confidence": 0.95, "response_message": "Réponse naturelle."}}
@@ -450,9 +490,9 @@ FORMAT (JSON uniquement) :
             logger.error(f"JSON invalide : {e}  Brut: {raw_json}")
             return self._unknown(original_command, f"JSON invalide : {e}")
 
-        intent          = data.get("intent", "UNKNOWN")
-        params          = data.get("params", {})
-        confidence      = float(data.get("confidence", 0.5))
+        intent           = data.get("intent", "UNKNOWN")
+        params           = data.get("params", {})
+        confidence       = float(data.get("confidence", 0.5))
         response_message = str(data.get("response_message", "")).strip()
 
         if intent not in INTENTS:
@@ -472,10 +512,7 @@ FORMAT (JSON uniquement) :
     # ──────────────────────────────────────────────────────────────────────────
 
     def _fallback_keywords(self, command: str) -> dict:
-        """
-        Fallback par mots-clés — utilisé SEULEMENT si Groq est hors ligne.
-        [B9] Version étendue : 25+ nouvelles catégories reconnues.
-        """
+        """Fallback par mots-clés — utilisé SEULEMENT si Groq est hors ligne."""
         lower = self._normalize_text(command.lower())
 
         # ── Heure / date ──────────────────────────────────────────────────────
@@ -483,7 +520,7 @@ FORMAT (JSON uniquement) :
             return {"intent": "SYSTEM_TIME", "params": {}, "confidence": 0.95}
 
         # ── Système ───────────────────────────────────────────────────────────
-        if any(k in lower for k in ["eteins", "eteinds", "shutdown", "poweroff", "coupe le pc", "arrete le pc", "arrets le pc"]):
+        if any(k in lower for k in ["eteins", "eteinds", "shutdown", "poweroff", "coupe le pc", "arrete le pc"]):
             return {"intent": "SYSTEM_SHUTDOWN", "params": {"delay_seconds": 10}, "confidence": 0.8}
         if any(k in lower for k in ["redemarre", "restart", "reboot", "redemarrage"]):
             return {"intent": "SYSTEM_RESTART", "params": {"delay_seconds": 10}, "confidence": 0.8}
@@ -505,11 +542,8 @@ FORMAT (JSON uniquement) :
             return {"intent": "POWER_STATE", "params": {}, "confidence": 0.85}
         if any(k in lower for k in ["infos systeme", "info systeme", "system info", "etat du pc", "etat pc", "infos pc"]):
             return {"intent": "SYSTEM_INFO", "params": {}, "confidence": 0.8}
-        # Variante plus naturelle: "donne moi les infos sur mon systeme"
-        if (
-            ("systeme" in lower or "pc" in lower or "ordinateur" in lower)
-            and any(k in lower for k in ["info", "infos", "etat", "spec", "specs", "configuration"])
-        ):
+        if (("systeme" in lower or "pc" in lower or "ordinateur" in lower)
+                and any(k in lower for k in ["info", "infos", "etat", "spec", "specs", "configuration"])):
             return {"intent": "SYSTEM_INFO", "params": {}, "confidence": 0.8}
         if any(k in lower for k in ["disque", "stockage", "disk info", "espace disque"]):
             return {"intent": "SYSTEM_DISK", "params": {}, "confidence": 0.8}
@@ -521,9 +555,8 @@ FORMAT (JSON uniquement) :
             return {"intent": "WAKE_ON_LAN", "params": {}, "confidence": 0.85}
 
         # ── Écran / Luminosité ────────────────────────────────────────────────
-        if any(k in lower for k in ["luminosite", "luminosite", "luminosity", "brightness", "brillo"]):
-            level = self._extract_number(lower, default=70)
-            return {"intent": "SCREEN_BRIGHTNESS", "params": {"level": level}, "confidence": 0.9}
+        if any(k in lower for k in ["luminosite", "luminosity", "brightness", "brillo"]):
+            return {"intent": "SCREEN_BRIGHTNESS", "params": {"level": self._extract_number(lower, 70)}, "confidence": 0.9}
         if any(k in lower for k in ["capture", "screenshot", "screen capture", "photo ecran", "prendre ecran"]):
             if any(k in lower for k in ["telephone", "phone", "mobile", "envoie", "partage"]):
                 return {"intent": "SCREENSHOT_TO_PHONE", "params": {}, "confidence": 0.85}
@@ -535,10 +568,10 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["enregistre ecran", "enregistre l ecran", "record screen"]):
             return {"intent": "SCREEN_RECORD", "params": {}, "confidence": 0.85}
 
-        # ── Audio — volume AVANT play ─────────────────────────────────────────
+        # ── Audio ─────────────────────────────────────────────────────────────
         if "volume" in lower:
             if any(k in lower for k in ["monte", "augmente", "hausse", "up", "plus fort"]):
-                return {"intent": "AUDIO_VOLUME_UP", "params": {"step": self._extract_number(lower, 10)}, "confidence": 0.85}
+                return {"intent": "AUDIO_VOLUME_UP",   "params": {"step": self._extract_number(lower, 10)}, "confidence": 0.85}
             if any(k in lower for k in ["baisse", "diminue", "descends", "down", "moins fort"]):
                 return {"intent": "AUDIO_VOLUME_DOWN", "params": {"step": self._extract_number(lower, 10)}, "confidence": 0.85}
             return {"intent": "AUDIO_VOLUME_SET", "params": {"level": self._extract_number(lower, 50)}, "confidence": 0.8}
@@ -595,8 +628,7 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["liste reseaux", "reseaux wifi", "reseaux disponibles", "wifi disponibles"]):
             return {"intent": "WIFI_LIST", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["connecte au wifi", "connect wifi", "rejoins le wifi"]):
-            params = self._extract_wifi_connect_params(command)
-            return {"intent": "WIFI_CONNECT", "params": params, "confidence": 0.85}
+            return {"intent": "WIFI_CONNECT", "params": self._extract_wifi_connect_params(command), "confidence": 0.85}
         if any(k in lower for k in ["deconnecte du wifi", "deconnecte wifi", "disconnect wifi"]):
             return {"intent": "WIFI_DISCONNECT", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["active le wifi", "active wifi", "enable wifi", "allume wifi"]):
@@ -612,40 +644,27 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["infos reseau", "info reseau", "network info", "ip locale", "mon ip"]):
             return {"intent": "NETWORK_INFO", "params": {}, "confidence": 0.85}
 
-        # ── Navigateur — résumé et lecture ───────────────────────────────────────
-        if any(k in lower for k in ["resume cette page", "resume la page", "resumer la page",
-                                     "summarize", "faire un resume"]):
+        # ── Navigateur ────────────────────────────────────────────────────────
+        if any(k in lower for k in ["resume cette page", "resume la page", "resumer la page", "summarize", "faire un resume"]):
             return {"intent": "BROWSER_SUMMARIZE", "params": {}, "confidence": 0.9}
-        if any(k in lower for k in ["lis la page", "lire la page", "lire le contenu",
-                                     "lis le contenu", "affiche le texte"]):
+        if any(k in lower for k in ["lis la page", "lire la page", "lire le contenu", "lis le contenu", "affiche le texte"]):
             return {"intent": "BROWSER_READ", "params": {}, "confidence": 0.9}
- 
-        # ── Navigateur — onglets ──────────────────────────────────────────────────
-        if any(k in lower for k in ["liste les onglets", "onglets ouverts", "mes onglets",
-                                     "quels onglets", "affiche les onglets"]):
+        if any(k in lower for k in ["liste les onglets", "onglets ouverts", "mes onglets", "quels onglets", "affiche les onglets"]):
             return {"intent": "BROWSER_LIST_TABS", "params": {}, "confidence": 0.95}
-        if any(k in lower for k in ["nouvel onglet", "ouvre un onglet", "new tab",
-                                     "ouvre un nouvel onglet"]):
+        if any(k in lower for k in ["nouvel onglet", "ouvre un onglet", "new tab", "ouvre un nouvel onglet"]):
             return {"intent": "BROWSER_NEW_TAB", "params": {}, "confidence": 0.95}
-        if any(k in lower for k in ["ferme l onglet", "ferme cet onglet", "close tab",
-                                     "ferme l'onglet actif"]):
+        if any(k in lower for k in ["ferme l onglet", "ferme cet onglet", "close tab", "ferme l'onglet actif"]):
             return {"intent": "BROWSER_CLOSE_TAB", "params": {}, "confidence": 0.9}
-        if any(k in lower for k in ["recharge la page", "actualise la page", "refresh",
-                                     "recharger la page", "actualiser"]):
+        if any(k in lower for k in ["recharge la page", "actualise la page", "refresh", "recharger la page", "actualiser"]):
             return {"intent": "BROWSER_RELOAD", "params": {}, "confidence": 0.9}
-        if any(k in lower for k in ["page precedente", "retour navigateur", "go back",
-                                     "reviens en arriere", "retourne en arriere"]):
+        if any(k in lower for k in ["page precedente", "retour navigateur", "go back", "reviens en arriere", "retourne en arriere"]):
             return {"intent": "BROWSER_BACK", "params": {}, "confidence": 0.9}
-        if any(k in lower for k in ["page suivante", "go forward", "avance",
-                                     "aller a la page suivante"]):
+        if any(k in lower for k in ["page suivante", "go forward", "avance", "aller a la page suivante"]):
             return {"intent": "BROWSER_FORWARD", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["extrait les liens", "liste les liens", "liens de la page"]):
             return {"intent": "BROWSER_EXTRACT_LINKS", "params": {}, "confidence": 0.9}
-        if any(k in lower for k in ["ferme le navigateur", "ferme chrome", "ferme firefox",
-                                     "ferme edge", "ferme brave", "close browser"]):
+        if any(k in lower for k in ["ferme le navigateur", "ferme chrome", "ferme firefox", "ferme edge", "ferme brave", "close browser"]):
             return {"intent": "BROWSER_CLOSE", "params": {}, "confidence": 0.9}
- 
-        # ── Navigateur — résultats de recherche ───────────────────────────────────
         if any(k in lower for k in ["ouvre le resultat", "ouvre le premier", "ouvre le 1",
                                      "ouvre le deuxieme", "ouvre le 2", "ouvre le 2e",
                                      "ouvre le troisieme", "ouvre le 3"]):
@@ -656,17 +675,13 @@ FORMAT (JSON uniquement) :
                 rank = 3
             return {"intent": "BROWSER_OPEN_RESULT", "params": {"rank": rank}, "confidence": 0.9}
 
-        # ── Fichiers ou web — "cherche" distingue les deux contextes ─────────────
+        # ── Fichiers ou web ───────────────────────────────────────────────────
         if any(k in lower for k in ["cherche", "trouve", "search"]):
             query = self._extract_after(lower, ["cherche ", "trouve ", "search "])
-            # Si le contexte est clairement web → BROWSER_SEARCH
             if any(k in lower for k in ["sur le web", "sur google", "google", "internet",
                                          "en ligne", "sur bing", "sur duckduckgo", "tutorial", "tutoriel"]):
                 return {"intent": "BROWSER_SEARCH", "params": {"query": query}, "confidence": 0.85}
-            # Sinon → recherche de fichier
             return {"intent": "FILE_SEARCH", "params": {"query": query}, "confidence": 0.7}
-
-        # ── Navigateur ────────────────────────────────────────────────────────
         if any(k in lower for k in ["recherche", "google", "web", "internet"]):
             query = self._extract_after(lower, ["recherche ", "google ", "cherche sur internet "])
             return {"intent": "BROWSER_SEARCH", "params": {"query": query}, "confidence": 0.75}
@@ -701,9 +716,7 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["lance la macro", "lance macro", "execute macro", "run macro"]):
             name = self._extract_after(lower, ["lance la macro ", "lance macro ", "execute macro ", "run macro "])
             return {"intent": "MACRO_RUN", "params": {"name": name or ""}, "confidence": 0.85}
-        # Macros nommées directement
-        macro_names = ["mode travail", "mode nuit", "mode cinema", "mode film", "demarrage", "startup"]
-        for macro_name in macro_names:
+        for macro_name in ["mode travail", "mode nuit", "mode cinema", "mode film", "demarrage", "startup"]:
             if macro_name in lower:
                 return {"intent": "MACRO_RUN", "params": {"name": macro_name}, "confidence": 0.9}
 
@@ -720,12 +733,14 @@ FORMAT (JSON uniquement) :
                                      "tu peux faire", "qui es-tu", "ton nom"]):
             return {"intent": "HELP", "params": {}, "confidence": 0.9}
 
-        # ── Questions de connaissance générale (sans action système) ────────
+        # ── Questions de connaissance générale ────────────────────────────────
         if (
-            any(k in lower for k in ["c'est quoi", "c’est quoi", "c est quoi", "cest quoi", "qu'est ce que", "qu’est ce que", "qu est ce que", "quest ce que", "explique", "pourquoi", "comment", "difference entre", "définition", "definition"])
+            any(k in lower for k in ["c est quoi", "cest quoi", "qu est ce que", "quest ce que",
+                                      "explique", "pourquoi", "comment", "difference entre",
+                                      "definition", "definition"])
             and not any(k in lower for k in [
                 "ouvre", "lance", "ferme", "mets", "volume", "wifi", "bluetooth", "disque",
-                "systeme", "système", "processus", "reseau", "réseau", "fichier", "dossier", "capture"
+                "systeme", "processus", "reseau", "fichier", "dossier", "capture"
             ])
         ):
             return {"intent": "KNOWLEDGE_QA", "params": {}, "confidence": 0.75}
@@ -733,29 +748,26 @@ FORMAT (JSON uniquement) :
         return self._unknown(command, "Aucun mot-clé reconnu (Groq hors ligne).")
 
     # ──────────────────────────────────────────────────────────────────────────
-    #  SEMANTIC GUARD — étendu
+    #  SEMANTIC GUARD
     # ──────────────────────────────────────────────────────────────────────────
 
     def _semantic_guard(self, command: str, result: dict) -> dict:
-        """
-        Garde-fou sémantique — corrige les erreurs critiques.
-        [Fix] Étendu pour couvrir luminosité et fermeture fenêtre.
-        Si Groq est confiant (>= 0.85), on ne touche à rien.
-        """
+        """Garde-fou sémantique — corrige les erreurs critiques de parsing."""
         out        = dict(result or {})
         lower      = command.lower().strip()
         normalized = self._normalize_text(lower)
         intent     = out.get("intent", "UNKNOWN")
         confidence = float(out.get("confidence", 0.0))
 
-        # Priorite absolue 1: requete memoire/conversationnelle ne doit pas annuler une extinction.
-        if any(k in normalized for k in ["tu te souviens", "souviens toi", "tu te rappelles", "rappelle toi"]) and intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}:
-            out["intent"] = "MEMORY_SHOW"
-            out["params"] = {}
+        # Priorité absolue 1 : requête mémoire ne doit pas annuler une extinction
+        if any(k in normalized for k in ["tu te souviens", "souviens toi", "tu te rappelles", "rappelle toi"]) \
+                and intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}:
+            out["intent"]     = "MEMORY_SHOW"
+            out["params"]     = {}
             out["confidence"] = max(confidence, 0.9)
             return out
 
-        # Priorite absolue 2: negation explicite "ne ... annule pas" -> interdit d'annuler.
+        # Priorité absolue 2 : négation explicite "n'annule pas"
         if intent in {"SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}:
             has_negated_cancel = (
                 "n'annule pas" in lower
@@ -764,16 +776,16 @@ FORMAT (JSON uniquement) :
                 or ("annule" in normalized and "pas" in normalized)
             )
             if has_negated_cancel:
-                out["intent"] = "UNKNOWN"
-                out["params"] = {}
+                out["intent"]     = "UNKNOWN"
+                out["params"]     = {}
                 out["confidence"] = max(confidence, 0.9)
                 return out
 
-        # Si Groq est très confiant, respecter son choix
+        # Si Groq est très confiant, ne pas toucher
         if confidence >= 0.85:
             return out
 
-        # Correction 1 : volume ne doit JAMAIS devenir AUDIO_PLAY
+        # Correction : volume ≠ AUDIO_PLAY
         if "volume" in normalized and intent == "AUDIO_PLAY":
             if any(k in normalized for k in ["monte", "augmente", "plus"]):
                 out["intent"] = "AUDIO_VOLUME_UP"
@@ -786,53 +798,64 @@ FORMAT (JSON uniquement) :
                 out["params"] = {"level": self._extract_number(lower, 50)}
             out["confidence"] = 0.88
 
-        # [Fix] Correction 2 : luminosité → SCREEN_BRIGHTNESS, jamais AUDIO_PLAY
+        # Correction : luminosité → SCREEN_BRIGHTNESS
         if any(k in normalized for k in ["luminosite", "luminosity", "brightness", "eclairage"]):
             if intent in ("AUDIO_PLAY", "AUDIO_VOLUME_SET", "UNKNOWN", "APP_OPEN"):
-                level = self._extract_number(lower, 70)
-                out["intent"] = "SCREEN_BRIGHTNESS"
-                out["params"] = {"level": level}
+                out["intent"]     = "SCREEN_BRIGHTNESS"
+                out["params"]     = {"level": self._extract_number(lower, 70)}
                 out["confidence"] = 0.92
 
-        # [Fix] Correction 3 : "ferme/referme ça/là/cette fenêtre" → WINDOW_CLOSE, jamais SCREEN_OFF
+        # Correction : "ferme ça" ≠ SCREEN_OFF
         close_terms = ["ferme", "referme", "fermer", "refermer", "close", "quitte"]
-        has_close_verb = any(k in normalized for k in close_terms)
-        if has_close_verb and intent == "SCREEN_OFF":
-            out["intent"] = "WINDOW_CLOSE"
-            out["params"] = {"query": ""}
+        if any(k in normalized for k in close_terms) and intent == "SCREEN_OFF":
+            out["intent"]     = "WINDOW_CLOSE"
+            out["params"]     = {"query": ""}
             out["confidence"] = 0.88
+
+        # [Bug6] REPEAT_LAST confondu avec MEMORY_SHOW
+        repeat_triggers = ["repete", "rejoue", "refais", "encore une fois",
+                           "meme chose", "derniere commande", "last command", "recommence"]
+        if intent == "MEMORY_SHOW" and any(k in normalized for k in repeat_triggers):
+            out["intent"]     = "REPEAT_LAST"
+            out["params"]     = {}
+            out["confidence"] = 0.92
 
         return out
 
     # ──────────────────────────────────────────────────────────────────────────
-    #  _postprocess_result — [Fix] Réactivé
+    #  _postprocess_result — [C3] MAINTENANT APPELÉ dans parse() et
+    #                              parse_with_context()
     # ──────────────────────────────────────────────────────────────────────────
 
     def _postprocess_result(self, command: str, result: dict) -> dict:
         """
-        Post-traitement après parsing — corrige les erreurs résiduelles.
-        [Fix] Réactivé : correction AUDIO_PLAY → SCREEN_BRIGHTNESS quand
-        "luminosite" est dans la commande, indépendamment de la confiance Groq.
-        Cette méthode est appelée dans les tests semaine 9 directement.
+        Post-traitement final — dernière ligne de défense après _semantic_guard.
+
+        [C3] Cette méthode était définie mais jamais appelée. Elle est maintenant
+        invoquée systématiquement à la fin de parse() et parse_with_context(),
+        que la source soit "groq" ou "fallback".
+
+        Corrections appliquées :
+        - AUDIO_PLAY / AUDIO_VOLUME_SET / UNKNOWN / APP_OPEN + "luminosité"
+          → SCREEN_BRIGHTNESS (indépendamment de la confiance Groq)
+        - SCREEN_OFF + verbe de fermeture → WINDOW_CLOSE
         """
         out    = dict(result or {})
         lower  = self._normalize_text((command or "").lower())
         intent = out.get("intent", "UNKNOWN")
 
-        # Correction prioritaire : luminosité
+        # Correction prioritaire : luminosité (indépendante de la confiance)
         if any(k in lower for k in ["luminosite", "luminosity", "brightness", "eclairage"]):
             if intent in ("AUDIO_PLAY", "AUDIO_VOLUME_SET", "UNKNOWN", "APP_OPEN"):
-                level = self._extract_number(command, 70)
-                out["intent"] = "SCREEN_BRIGHTNESS"
-                out["params"] = {"level": level}
+                out["intent"]     = "SCREEN_BRIGHTNESS"
+                out["params"]     = {"level": self._extract_number(command, 70)}
                 out["confidence"] = 0.92
                 return out
 
         # Correction secondaire : "ferme/referme" → WINDOW_CLOSE
-        close_terms = ["ferme", "referme", "close", "quitte"]
-        if any(k in lower for k in close_terms) and intent == "SCREEN_OFF":
-            out["intent"] = "WINDOW_CLOSE"
-            out["params"] = {"query": ""}
+        if any(k in lower for k in ["ferme", "referme", "close", "quitte"]) and intent == "SCREEN_OFF":
+            out["intent"]     = "WINDOW_CLOSE"
+            out["params"]     = {"query": ""}
             out["confidence"] = 0.88
 
         return out
@@ -877,8 +900,8 @@ FORMAT (JSON uniquement) :
         return self._extract_after(command, keywords)
 
     def _extract_open_target_params(self, text: str, base_params: dict | None = None) -> dict:
-        params = dict(base_params or {})
-        lower = text.lower().strip()
+        params      = dict(base_params or {})
+        lower       = text.lower().strip()
         target_type = params.get("target_type", "any")
         if any(token in lower for token in ["dossier", "répertoire", "repertoire"]):
             target_type = "directory"
@@ -894,7 +917,7 @@ FORMAT (JSON uniquement) :
         return params
 
     def _extract_location_context(self, text: str) -> dict:
-        params = {}
+        params      = {}
         drive_match = re.search(r"(?:disque|disk|lecteur|drive)\s+([a-z])\b", text, re.IGNORECASE)
         if drive_match:
             params["search_dirs"] = [f"{drive_match.group(1).upper()}:\\"]
@@ -910,14 +933,14 @@ FORMAT (JSON uniquement) :
 
     @staticmethod
     def _extract_wifi_connect_params(text: str) -> dict:
-        raw = text.strip()
+        raw    = text.strip()
         quoted = re.search(r"wifi\s+[\"']([^\"']+)[\"']", raw, re.IGNORECASE)
-        ssid = quoted.group(1).strip() if quoted else ""
+        ssid   = quoted.group(1).strip() if quoted else ""
         if not ssid:
             m = re.search(r"(?:connecte(?: toi)? au wifi|wifi connect)\s+(.+)$", raw, re.IGNORECASE)
             if m:
                 ssid = m.group(1).strip(" \"'")
-        pwd = ""
+        pwd   = ""
         m_pwd = re.search(r"(?:mot de passe|password|mdp)\s*[:=]?\s*([\S]+)$", raw, re.IGNORECASE)
         if m_pwd:
             pwd = m_pwd.group(1).strip("\"'")

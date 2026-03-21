@@ -1,9 +1,9 @@
 {
-  "last_session": "2026-03-21 07:52",
+  "last_session": "2026-03-21 12:01",
   "preferences": {
     "app_counts": {
-      "chrome": 5,
-      "bloc-notes": 2
+      "chrome": 6,
+      "bloc-notes": 3
     },
     "favorite_apps": [
       "chrome",
@@ -11,9 +11,12 @@
     ],
     "folder_counts": {
       "E:\\": 1,
-      "C:\\Users\\Public\\Desktop": 1
+      "C:\\Users\\Public\\Desktop": 1,
+      "Bureau\\JarvisDesktop": 1,
+      "C:\\Users\\USER\\Documents": 2
     },
     "favorite_folders": [
+      "C:\\Users\\USER\\Documents",
       "E:\\",
       "C:\\Users\\Public\\Desktop"
     ]
@@ -21,7 +24,7 @@
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-21 08:27"
+      "learned": "2026-03-21 11:40"
     },
     "prenom": {
       "value": "Christophe",
@@ -30,6 +33,48 @@
   },
   "events": {
     "system": [
+      {
+        "intent": "SYSTEM_LOCK",
+        "action": "system_lock",
+        "delay_seconds": null,
+        "timestamp": 1774089333,
+        "datetime": "2026-03-21 11:35"
+      },
+      {
+        "intent": "SYSTEM_TASK_MANAGER",
+        "action": "system_task_manager",
+        "delay_seconds": null,
+        "timestamp": 1774088264,
+        "datetime": "2026-03-21 11:17"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774088183,
+        "datetime": "2026-03-21 11:16"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774088117,
+        "datetime": "2026-03-21 11:15"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774088073,
+        "datetime": "2026-03-21 11:14"
+      },
+      {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "delay_seconds": null,
+        "timestamp": 1774088047,
+        "datetime": "2026-03-21 11:14"
+      },
       {
         "intent": "SYSTEM_NETWORK",
         "action": "system_network",
@@ -234,6 +279,20 @@
     ],
     "app": [
       {
+        "name": "bloc-notes",
+        "pid": 15648,
+        "args": [],
+        "timestamp": 1774091268,
+        "datetime": "2026-03-21 12:07"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774089632,
+        "datetime": "2026-03-21 11:40"
+      },
+      {
         "name": "chrome",
         "pid": null,
         "args": [],
@@ -285,6 +344,30 @@
     ],
     "folder": [
       {
+        "path": "C:\\Users\\USER\\Documents",
+        "name": "Documents",
+        "is_dir": true,
+        "parent": "C:\\Users\\USER",
+        "timestamp": 1774092045,
+        "datetime": "2026-03-21 12:20"
+      },
+      {
+        "path": "C:\\Users\\USER\\Documents",
+        "name": "Documents",
+        "is_dir": true,
+        "parent": "C:\\Users\\USER",
+        "timestamp": 1774092033,
+        "datetime": "2026-03-21 12:20"
+      },
+      {
+        "path": "Bureau\\JarvisDesktop",
+        "name": "JarvisDesktop",
+        "is_dir": true,
+        "parent": "Bureau",
+        "timestamp": 1774091707,
+        "datetime": "2026-03-21 12:15"
+      },
+      {
         "path": "C:\\Users\\Public\\Desktop",
         "name": "Desktop",
         "is_dir": true,
@@ -302,6 +385,96 @@
       }
     ],
     "browser": [
+      {
+        "intent": "BROWSER_RELOAD",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774090598,
+        "datetime": "2026-03-21 11:56"
+      },
+      {
+        "intent": "BROWSER_LIST_RESULTS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 0,
+        "timestamp": 1774090468,
+        "datetime": "2026-03-21 11:54"
+      },
+      {
+        "intent": "BROWSER_LIST_RESULTS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 0,
+        "timestamp": 1774090433,
+        "datetime": "2026-03-21 11:53"
+      },
+      {
+        "intent": "BROWSER_NAVIGATE",
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774090178,
+        "datetime": "2026-03-21 11:49"
+      },
+      {
+        "intent": "BROWSER_GO_TO_SITE",
+        "url": "https://www.youtube.com/results?search_query=lofi+music",
+        "query": "lofi music",
+        "site": "youtube",
+        "tabs": null,
+        "timestamp": 1774090132,
+        "datetime": "2026-03-21 11:48"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.google.com/search?q=python+tutorial",
+        "query": "python tutorial",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774090006,
+        "datetime": "2026-03-21 11:46"
+      },
+      {
+        "intent": "BROWSER_BACK",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774089869,
+        "datetime": "2026-03-21 11:44"
+      },
+      {
+        "intent": "BROWSER_RELOAD",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774089808,
+        "datetime": "2026-03-21 11:43"
+      },
+      {
+        "intent": "BROWSER_LIST_TABS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774089763,
+        "datetime": "2026-03-21 11:42"
+      },
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "about:blank",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774089676,
+        "datetime": "2026-03-21 11:41"
+      },
       {
         "intent": "BROWSER_SEARCH",
         "url": "https://www.google.com/search?q=python",
@@ -341,6 +514,34 @@
     ],
     "network": [
       {
+        "intent": "WIFI_DISABLE",
+        "ssid": "",
+        "action": "wifi_disable",
+        "timestamp": 1774089593,
+        "datetime": "2026-03-21 11:39"
+      },
+      {
+        "intent": "BLUETOOTH_ENABLE",
+        "ssid": "",
+        "action": "bluetooth_enable",
+        "timestamp": 1774089534,
+        "datetime": "2026-03-21 11:38"
+      },
+      {
+        "intent": "NETWORK_INFO",
+        "ssid": "",
+        "action": "network_info",
+        "timestamp": 1774089495,
+        "datetime": "2026-03-21 11:38"
+      },
+      {
+        "intent": "WIFI_LIST",
+        "ssid": "",
+        "action": "wifi_list",
+        "timestamp": 1774089397,
+        "datetime": "2026-03-21 11:36"
+      },
+      {
         "intent": "BLUETOOTH_DISABLE",
         "ssid": "",
         "action": "bluetooth_disable",
@@ -366,6 +567,12 @@
       {
         "intent": "SCREEN_BRIGHTNESS",
         "action": "brightness",
+        "timestamp": 1774091227,
+        "datetime": "2026-03-21 12:07"
+      },
+      {
+        "intent": "SCREEN_BRIGHTNESS",
+        "action": "brightness",
         "timestamp": 1774077980,
         "datetime": "2026-03-21 08:26"
       },
@@ -375,12 +582,45 @@
         "timestamp": 1774077937,
         "datetime": "2026-03-21 08:25"
       }
+    ],
+    "search": [
+      {
+        "query": "comprendre 023.docx",
+        "results": [
+          {
+            "name": "comprendre 023.docx",
+            "path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
+            "resolved_path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
+            "parent": "C:\\Users\\USER\\Documents",
+            "extension": ".docx",
+            "size": 25184,
+            "size_str": "24.6 KB",
+            "modified": "2025-08-14 04:31",
+            "created": "2025-09-02 13:24",
+            "is_dir": false
+          }
+        ],
+        "count": 1,
+        "type": "file",
+        "timestamp": 1774092093,
+        "datetime": "2026-03-21 12:21"
+      }
+    ],
+    "file": [
+      {
+        "path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
+        "name": "comprendre 023.docx",
+        "is_dir": false,
+        "parent": "C:\\Users\\USER\\Documents",
+        "timestamp": 1774092093,
+        "datetime": "2026-03-21 12:21"
+      }
     ]
   },
   "stats": {
-    "session_count": 30,
-    "total_commands": 50
+    "session_count": 35,
+    "total_commands": 78
   },
-  "session_count": 30,
-  "_saved_at": "2026-03-21 08:30:01"
+  "session_count": 35,
+  "_saved_at": "2026-03-21 12:21:33"
 }

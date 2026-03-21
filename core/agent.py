@@ -646,8 +646,25 @@ class Agent:
 
         # Suivi contextuel: "préviens/signal 5 minutes avant" ne doit pas
         # être interprété comme une nouvelle extinction à 240s.
+        # [Bug2] Vérifier qu'une extinction a déjà été programmée (via mémoire)
+        # avant d'activer ce garde-fou — évite de bloquer "éteins dans 5 min"
+        # alors qu'aucune extinction n'est en cours.
         reminder_markers = ["avant", "minute", "minutes", "previens", "previent", "avert", "signal", "rappel"]
-        if intent in {"SYSTEM_SHUTDOWN", "SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"} and sum(1 for m in reminder_markers if m in lower) >= 2:
+        shutdown_already_scheduled = False
+        try:
+            mem_system = self._memory.recall_last("system")
+            if isinstance(mem_system, dict):
+                last_intent = str(mem_system.get("intent", "")).upper()
+                shutdown_already_scheduled = last_intent in {
+                    "SYSTEM_SHUTDOWN", "SYSTEM_RESTART"
+                }
+        except Exception:
+            pass
+        if (
+            shutdown_already_scheduled
+            and intent in {"SYSTEM_SHUTDOWN", "SYSTEM_CANCEL_SHUTDOWN", "POWER_CANCEL"}
+            and sum(1 for m in reminder_markers if m in lower) >= 2
+        ):
             return {
                 "success": True,
                 "message": "J'ai compris: tu demandes un rappel avant l'extinction deja programmee. Je ne dois pas reprogrammer l'arret. Je peux garder l'extinction actuelle ou l'annuler si tu veux.",

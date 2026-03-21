@@ -6,11 +6,22 @@ Responsabilités :
   - Connexion / lancement de Chrome en mode debug (--remote-debugging-port=9222)
   - Résolution d'onglet (par index, par titre/URL, ambiguïté)
   - Opérations sur les onglets : list, new, switch, close, navigate, back, forward, reload
-  - Primitive _cdp_call / _cdp_eval pour envoyer des commandes DevTools
+  - Primitive cdp_call / cdp_eval pour envoyer des commandes DevTools
 
 Chrome DOIT être lancé avec :
   --remote-debugging-port=9222
   (BrowserAutomation.ensure_session() le fait automatiquement)
+
+CORRECTIONS :
+  [Bug 5] Ajout de execute_js() — alias de cdp_eval() utilisé par page_actions.py.
+          Avant : page_actions.py appelait self._session.execute_js(tab, js)
+                  → AttributeError : 'CDPSession' object has no attribute 'execute_js'
+          Après : execute_js() délègue à cdp_eval() avec gestion du résultat JS.
+
+  [Bug 4] new_tab() robuste : si Chrome est déjà en debug mais n'a pas d'onglet
+          accessible (ex: chrome://newtab uniquement), on navigue dans l'onglet
+          existant plutôt que d'ouvrir une nouvelle fenêtre système.
+          Ajout de focus_tab() utilisé par browser_control.switch_to_tab().
 """
 
 from __future__ import annotations
@@ -64,6 +75,8 @@ class CDPSession:
     def __init__(self, debug_port: int = 9222):
         self.debug_port = debug_port
         self._base = f"http://127.0.0.1:{debug_port}"
+        # Stockage partagé des résultats de recherche (correction B14)
+        self._shared_search_results: list = []
 
     # ── Santé de la session ───────────────────────────────────────────────────
 
@@ -132,8 +145,6 @@ class CDPSession:
                 continue
             tabs.append(tab)
 
-        # Si seuls des onglets internes existent (ex: chrome://newtab),
-        # on les retourne quand même pour pouvoir piloter la session.
         if not tabs and not include_internal:
             return all_tabs
         return tabs
@@ -142,7 +153,6 @@ class CDPSession:
         """Retourne un résultat structuré listant tous les onglets ouverts."""
         ready = self.ensure_session(launch_if_missing=False)
         if not ready["success"]:
-            # Fallback: lire les titres de fenêtres Windows
             fallback = self._tabs_from_windows()
             if fallback:
                 display = self._format_windows_tabs(fallback)
@@ -171,25 +181,71 @@ class CDPSession:
         )
 
     def new_tab(self, url: str = "about:blank") -> dict:
-        """Ouvre un nouvel onglet CDP."""
+        """
+        Ouvre un nouvel onglet CDP.
+
+        [Bug 4] Si Chrome vient d'être lancé et n'a qu'un onglet interne
+        (chrome://newtab), on navigue dans cet onglet plutôt que d'ouvrir
+        une nouvelle fenêtre système via /json/new.
+        """
         ready = self.ensure_session(launch_if_missing=True)
         if not ready["success"]:
             return ready
 
-        url = normalize_url(url) if url and url != "about:blank" else "about:blank"
-        endpoint = f"{self._base}/json/new?{urllib.parse.quote(url, safe=':/?&=%')}"
+        target_url = normalize_url(url) if url and url != "about:blank" else ""
+
+        # [Bug 4] Vérifier si on a des onglets utilisables (non-internes)
+        all_tabs = self.get_tabs(include_internal=True)
+        user_tabs = [t for t in all_tabs if not t.url.startswith("chrome://")]
+
+        # Si Chrome vient d'être lancé et n'a que des onglets internes,
+        # naviguer dans le premier onglet interne plutôt qu'ouvrir une fenêtre
+        if not user_tabs and all_tabs and target_url:
+            nav = self.navigate_tab(all_tabs[0], target_url)
+            if nav["success"]:
+                return self._ok(
+                    f"Onglet ouvert : {target_url}",
+                    {"url": target_url, "title": all_tabs[0].title, "reused": True}
+                )
+
+        # Cas normal : ouvrir un vrai nouvel onglet via CDP
+        endpoint = f"{self._base}/json/new"
+        if target_url:
+            endpoint += f"?{urllib.parse.quote(target_url, safe=':/?&=%')}"
+
         try:
-            # Chrome récent préfère souvent PUT sur /json/new.
+            # Chrome récent préfère PUT sur /json/new
             resp = requests.put(endpoint, timeout=3)
             if resp.status_code >= 400:
-                # Fallback anciennes versions/outils : GET
                 resp = requests.get(endpoint, timeout=3)
             if resp.status_code >= 400:
                 return self._err(f"Impossible d'ouvrir un nouvel onglet (HTTP {resp.status_code}).")
             data = resp.json() if resp.text else {}
-            return self._ok("Nouvel onglet ouvert.", {"url": url, "title": data.get("title", "")})
+            new_tab_id = data.get("id", "")
+
+            # Si une URL est demandée et que le tab a été créé sur about:blank,
+            # naviguer explicitement vers l'URL cible
+            if target_url and new_tab_id:
+                tabs = self.get_tabs()
+                target_tab = next((t for t in tabs if t.id == new_tab_id), None)
+                if target_tab:
+                    time.sleep(0.3)
+                    self.navigate_tab(target_tab, target_url)
+
+            return self._ok(
+                "Nouvel onglet ouvert.",
+                {"url": target_url or "about:blank", "title": data.get("title", "")}
+            )
         except Exception as e:
             return self._err(f"Erreur nouvel onglet: {e}")
+
+    def focus_tab(self, tab: CDPTab) -> dict:
+        """
+        Met un onglet au premier plan (focus).
+        Utilisé par browser_control.switch_to_tab().
+        Alias de activate_tab() pour une API plus claire.
+        """
+        return self.activate_tab(tab)
 
     def activate_tab(self, tab: CDPTab) -> dict:
         """Bascule sur un onglet (le met au premier plan)."""
@@ -233,14 +289,12 @@ class CDPSession:
         if not tabs:
             return self._err("Aucun onglet pilotable détecté. Ouvre Chrome d'abord.")
 
-        # Par index
         if index is not None:
             idx = int(index) - 1
             if 0 <= idx < len(tabs):
                 return tabs[idx]
             return self._err(f"Onglet {index} introuvable.", {"available": len(tabs)})
 
-        # Par recherche textuelle
         q = (query or "").strip().lower()
         if q:
             matches = [
@@ -261,11 +315,9 @@ class CDPSession:
                 }
             return self._err(f"Aucun onglet ne correspond à '{query}'.")
 
-        # Fallback : premier onglet ou seul onglet
         if fallback_first or len(tabs) == 1:
             return tabs[0]
 
-        # Ambiguïté : plusieurs onglets, pas de précision
         lines = ["Plusieurs onglets sont ouverts. Lequel vises-tu ?", "─" * 60]
         for i, t in enumerate(tabs, 1):
             lines.append(f"  {i}. {t.title or '(sans titre)'}  —  {t.url[:50]}")
@@ -312,10 +364,37 @@ class CDPSession:
             return result
 
         r = (result.get("data") or {}).get("result") or {}
-        # Propager les erreurs JS
         if r.get("type") == "object" and r.get("subtype") == "error":
             return self._err(f"Erreur JS: {r.get('description', 'inconnue')}")
         return self._ok("ok", r.get("value"))
+
+    def execute_js(self, tab: CDPTab, expression: str, await_promise: bool = False):
+        """
+        [Bug 5] Alias de cdp_eval() utilisé par page_actions.py.
+
+        Avant cette correction, page_actions.py appelait :
+            self._session.execute_js(tab, js)
+        ce qui provoquait :
+            AttributeError: 'CDPSession' object has no attribute 'execute_js'
+
+        Cette méthode retourne directement la valeur JS (pas le dict complet)
+        pour rester compatible avec l'usage dans page_actions.py qui attend
+        le résultat brut (liste, dict, str, None...).
+
+        Exemples d'appels dans page_actions.py :
+            raw = self._session.execute_js(tab, js)
+            if isinstance(raw, list):  # résultats de recherche
+            ...
+            result = self._session.execute_js(tab, js)
+            if isinstance(result, dict) and result.get("ok"):  # fill_field
+        """
+        result = self.cdp_eval(tab, expression, await_promise=await_promise)
+        if not result["success"]:
+            # Lever une exception pour que page_actions.py puisse la capturer
+            # avec son try/except habituel
+            raise RuntimeError(f"execute_js échoué: {result.get('message', 'erreur inconnue')}")
+        # Retourner directement la valeur, pas le dict complet
+        return result.get("data")
 
     def navigate_tab(self, tab: CDPTab, url: str) -> dict:
         """Navigue vers une URL dans un onglet."""
@@ -438,5 +517,4 @@ def normalize_url(url: str) -> str:
         return u
     if re.match(r"^[\w.-]+\.[a-z]{2,}(/.*)?$", u, re.IGNORECASE):
         return "https://" + u
-    # Ressemble à une recherche → Google
     return "https://www.google.com/search?q=" + urllib.parse.quote_plus(u)
