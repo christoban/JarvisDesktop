@@ -1,8 +1,8 @@
 {
-  "last_session": "2026-03-21 12:01",
+  "last_session": "2026-03-22 07:51",
   "preferences": {
     "app_counts": {
-      "chrome": 6,
+      "chrome": 7,
       "bloc-notes": 3
     },
     "favorite_apps": [
@@ -19,20 +19,61 @@
       "C:\\Users\\USER\\Documents",
       "E:\\",
       "C:\\Users\\Public\\Desktop"
-    ]
+    ],
+    "volume": 50
   },
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-21 11:40"
+      "learned": "2026-03-21 18:34"
     },
     "prenom": {
       "value": "Christophe",
       "learned": "2026-03-21 08:30"
+    },
+    "pref_music_travail": {
+      "value": "ma playlist",
+      "learned": "2026-03-21 18:52"
+    },
+    "preference_travail": {
+      "value": "ma playlist",
+      "learned": "2026-03-21 18:52"
+    },
+    "mode_travail": {
+      "value": "ma playlist",
+      "learned": "2026-03-21 18:52"
     }
   },
   "events": {
     "system": [
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": 14400,
+        "timestamp": 1774105533,
+        "datetime": "2026-03-21 16:05"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": 14400,
+        "timestamp": 1774100929,
+        "datetime": "2026-03-21 14:48"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": 10,
+        "timestamp": 1774095509,
+        "datetime": "2026-03-21 13:18"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774095473,
+        "datetime": "2026-03-21 13:17"
+      },
       {
         "intent": "SYSTEM_LOCK",
         "action": "system_lock",
@@ -278,6 +319,13 @@
       }
     ],
     "app": [
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774114485,
+        "datetime": "2026-03-21 18:34"
+      },
       {
         "name": "bloc-notes",
         "pid": 15648,
@@ -567,6 +615,12 @@
       {
         "intent": "SCREEN_BRIGHTNESS",
         "action": "brightness",
+        "timestamp": 1774106073,
+        "datetime": "2026-03-21 16:14"
+      },
+      {
+        "intent": "SCREEN_BRIGHTNESS",
+        "action": "brightness",
         "timestamp": 1774091227,
         "datetime": "2026-03-21 12:07"
       },
@@ -615,12 +669,46 @@
         "timestamp": 1774092093,
         "datetime": "2026-03-21 12:21"
       }
+    ],
+    "audio": [
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 50,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116573,
+        "datetime": "2026-03-21 19:09"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 30,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116522,
+        "datetime": "2026-03-21 19:08"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 50,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116342,
+        "datetime": "2026-03-21 19:05"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 80,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116060,
+        "datetime": "2026-03-21 19:01"
+      }
     ]
   },
   "stats": {
-    "session_count": 35,
-    "total_commands": 78
+    "session_count": 60,
+    "total_commands": 88
   },
-  "session_count": 35,
-  "_saved_at": "2026-03-21 12:21:33"
+  "session_count": 60,
+  "_saved_at": "2026-03-22 07:51:02"
 }

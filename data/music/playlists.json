@@ -1,1 +1,825 @@
-{}
+{
+  "gospel hit": {
+    "id": "gospel hit",
+    "name": "gospel hit",
+    "songs": [
+      {
+        "id": "18 ON MY MATTER",
+        "title": "18 ON MY MATTER",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\18 ON MY MATTER.mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Ada_Ehi_-_OPEN_DOORS_(The_Official)_Lyrics_Video(128k)",
+        "title": "Ada_Ehi_-_OPEN_DOORS_(The_Official)_Lyrics_Video(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Ada_Ehi_-_OPEN_DOORS_(The_Official)_Lyrics_Video(128k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "ADA_EHI_-_The_Final_Say_(The_Official_Video)(360p)",
+        "title": "ADA_EHI_-_The_Final_Say_(The_Official_Video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\ADA_EHI_-_The_Final_Say_(The_Official_Video)(360p).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Ada_Ehi_ft_Dena_Mwana_-_Another_Miracle___The_Official_Video(256k)",
+        "title": "Ada_Ehi_ft_Dena_Mwana_-_Another_Miracle___The_Official_Video(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Ada_Ehi_ft_Dena_Mwana_-_Another_Miracle___The_Official_Video(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "BACK_WITH_YOUR_TESTIMONY_BY_DR_PAUL_ENENCHE(128k)",
+        "title": "BACK_WITH_YOUR_TESTIMONY_BY_DR_PAUL_ENENCHE(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\BACK_WITH_YOUR_TESTIMONY_BY_DR_PAUL_ENENCHE(128k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Big_God_-_Tim_Godfrey_X_Fearless_Community_ft._Anderson(256k)",
+        "title": "Big_God_-_Tim_Godfrey_X_Fearless_Community_ft._Anderson(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Big_God_-_Tim_Godfrey_X_Fearless_Community_ft._Anderson(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "CeCe_Winans_-_Goodness_of_God__Official_Video_(256k)",
+        "title": "CeCe_Winans_-_Goodness_of_God__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\CeCe_Winans_-_Goodness_of_God__Official_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "CeCe_Winans_-_That_s_My_King__Official_Video_(256k)",
+        "title": "CeCe_Winans_-_That_s_My_King__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\CeCe_Winans_-_That_s_My_King__Official_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Charlie_Puth___Wiz_Khalifa_-_See_You_Again___One_Voice_Children_s_Choir_Cover__Official_Music_Video_(128k)",
+        "title": "Charlie_Puth___Wiz_Khalifa_-_See_You_Again___One_Voice_Children_s_Choir_Cover__Official_Music_Video_(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Charlie_Puth___Wiz_Khalifa_-_See_You_Again___One_Voice_Children_s_Choir_Cover__Official_Music_Video_(128k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Chidinma_&_Indira_-_Over_and_Over_(Official_Video)(360p)",
+        "title": "Chidinma_&_Indira_-_Over_and_Over_(Official_Video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Chidinma_&_Indira_-_Over_and_Over_(Official_Video)(360p).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Chidinma_feat._KS_Bloom_-_Blessings_Follow_Me_(Official_Video)(360p)",
+        "title": "Chidinma_feat._KS_Bloom_-_Blessings_Follow_Me_(Official_Video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Chidinma_feat._KS_Bloom_-_Blessings_Follow_Me_(Official_Video)(360p).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Chosen_Family_-_Rina_Sawayama___Elton_John___One_Voice_Childrens_Choir___Kids_Cover__Official_Video_(256k)",
+        "title": "Chosen_Family_-_Rina_Sawayama___Elton_John___One_Voice_Childrens_Choir___Kids_Cover__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Chosen_Family_-_Rina_Sawayama___Elton_John___One_Voice_Childrens_Choir___Kids_Cover__Official_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "DARLING_JESUS_-_SON_Music_ft._Neeja_[Official_Video]_________#spotlitenation_#darlingJesus(256k)",
+        "title": "DARLING_JESUS_-_SON_Music_ft._Neeja_[Official_Video]_________#spotlitenation_#darlingJesus(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DARLING_JESUS_-_SON_Music_ft._Neeja_[Official_Video]_________#spotlitenation_#darlingJesus(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "DEBORAH_LUKALU_-_RESTAURÉ_《TRUST_IN_THE_STORM_》(256k)",
+        "title": "DEBORAH_LUKALU_-_RESTAURÉ_《TRUST_IN_THE_STORM_》(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DEBORAH_LUKALU_-_RESTAURÉ_《TRUST_IN_THE_STORM_》(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "DEFE_DEFE__Lyric_Video__-_Team_Eternity___Speed_up_Afro_mix(256k)",
+        "title": "DEFE_DEFE__Lyric_Video__-_Team_Eternity___Speed_up_Afro_mix(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DEFE_DEFE__Lyric_Video__-_Team_Eternity___Speed_up_Afro_mix(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "DEFINITELY_-_ADA_EHI____The_Official_Music_Video(256k)",
+        "title": "DEFINITELY_-_ADA_EHI____The_Official_Music_Video(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DEFINITELY_-_ADA_EHI____The_Official_Music_Video(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Dena_Mwana_-__Emmanuel__feat_El_Georges__Clip_Officiel(256k)",
+        "title": "Dena_Mwana_-__Emmanuel__feat_El_Georges__Clip_Officiel(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Dena_Mwana_-__Emmanuel__feat_El_Georges__Clip_Officiel(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Fake it",
+        "title": "Fake it",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Fake it.mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Faveur_Mukoko_-_Rémunérateur___Clip_Officiel_(256k)",
+        "title": "Faveur_Mukoko_-_Rémunérateur___Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Faveur_Mukoko_-_Rémunérateur___Clip_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Glorious",
+        "title": "Glorious",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Glorious.mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Golden__Netflix_K-Pop_Demon_Hunters____One_Voice_Children’s_Choir__Official_Music_Video_(256k)",
+        "title": "Golden__Netflix_K-Pop_Demon_Hunters____One_Voice_Children’s_Choir__Official_Music_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Golden__Netflix_K-Pop_Demon_Hunters____One_Voice_Children’s_Choir__Official_Music_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "I will sing ___Ada",
+        "title": "I will sing ___Ada",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\I will sing ___Ada.aac",
+        "added_at": 1774115641
+      },
+      {
+        "id": "In Jesus Name",
+        "title": "In Jesus Name",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\In Jesus Name.mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "INDIRA_-_IL_EST_LÀ_(Remix)_feat._KS_BLOOM_(Official_Video)(128k)",
+        "title": "INDIRA_-_IL_EST_LÀ_(Remix)_feat._KS_BLOOM_(Official_Video)(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\INDIRA_-_IL_EST_LÀ_(Remix)_feat._KS_BLOOM_(Official_Video)(128k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "INDIRA_-_Pour_La_Gloire_De_Dieu__Clip_Officiel_(256k)",
+        "title": "INDIRA_-_Pour_La_Gloire_De_Dieu__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\INDIRA_-_Pour_La_Gloire_De_Dieu__Clip_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Jireh___Elevation_Worship___Maverick_City(256k)",
+        "title": "Jireh___Elevation_Worship___Maverick_City(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Jireh___Elevation_Worship___Maverick_City(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "JOSIANE_NSIMBA___EXAGERE_ENCORE___CLIP_OFFICIEL_(256k)",
+        "title": "JOSIANE_NSIMBA___EXAGERE_ENCORE___CLIP_OFFICIEL_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\JOSIANE_NSIMBA___EXAGERE_ENCORE___CLIP_OFFICIEL_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Justin_Bieber_-_Anyone___One_Voice_Children_s_Choir_Cover(256k)",
+        "title": "Justin_Bieber_-_Anyone___One_Voice_Children_s_Choir_Cover(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Justin_Bieber_-_Anyone___One_Voice_Children_s_Choir_Cover(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Katy_Nichole___Big_Daddy_Weave_-__God_Is_In_The_Story___Official_Lyric_Video_(256k)",
+        "title": "Katy_Nichole___Big_Daddy_Weave_-__God_Is_In_The_Story___Official_Lyric_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Katy_Nichole___Big_Daddy_Weave_-__God_Is_In_The_Story___Official_Lyric_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "KS_BLOOM_-_C'est_Tchor_Feat_MORIJAH_(Lyrics)(256k)",
+        "title": "KS_BLOOM_-_C'est_Tchor_Feat_MORIJAH_(Lyrics)(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-_C'est_Tchor_Feat_MORIJAH_(Lyrics)(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "KS_BLOOM_-_Commando__Clip_Officiel_(256k)",
+        "title": "KS_BLOOM_-_Commando__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-_Commando__Clip_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "KS_BLOOM_-_C’est_Dieu_remix_(_Official_Video)_ft._CHIDINMA(360p)",
+        "title": "KS_BLOOM_-_C’est_Dieu_remix_(_Official_Video)_ft._CHIDINMA(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-_C’est_Dieu_remix_(_Official_Video)_ft._CHIDINMA(360p).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "KS_BLOOM_-ohh_la_MISÉRICORDE_(_official_video)(360p)",
+        "title": "KS_BLOOM_-ohh_la_MISÉRICORDE_(_official_video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-ohh_la_MISÉRICORDE_(_official_video)(360p).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Limoblaze,_Lecrae,_Happi_-_Jireh__My_Provider__[Official_Video](256k)",
+        "title": "Limoblaze,_Lecrae,_Happi_-_Jireh__My_Provider__[Official_Video](256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Limoblaze,_Lecrae,_Happi_-_Jireh__My_Provider__[Official_Video](256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Mandisa_-_Overcomer(256k)",
+        "title": "Mandisa_-_Overcomer(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Mandisa_-_Overcomer(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Mandisa_-_Press_On__Audio_(256k)",
+        "title": "Mandisa_-_Press_On__Audio_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Mandisa_-_Press_On__Audio_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Morijah_-_Abonde_en_moi__Audio_Officiel_(256k)",
+        "title": "Morijah_-_Abonde_en_moi__Audio_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_Abonde_en_moi__Audio_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Morijah_-_En_Toi__Clip_Officiel_(256k)",
+        "title": "Morijah_-_En_Toi__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_En_Toi__Clip_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Morijah_-_Parcours__Clip_Officiel_(256k)",
+        "title": "Morijah_-_Parcours__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_Parcours__Clip_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Morijah_-_Reconnaissance__Clip_Officiel__feat._David_Okit(256k)",
+        "title": "Morijah_-_Reconnaissance__Clip_Officiel__feat._David_Okit(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_Reconnaissance__Clip_Officiel__feat._David_Okit(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Morijah___Dena_Mwana_-_Tout_Nouveau_Tout_Beau__Clip_Officiel_(256k)",
+        "title": "Morijah___Dena_Mwana_-_Tout_Nouveau_Tout_Beau__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah___Dena_Mwana_-_Tout_Nouveau_Tout_Beau__Clip_Officiel_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "MOSES_BLISS_-_MIRACLE_NO_DEY_TIRE_JESUS_[Official_Video]_x_FESTIZIE_x_CHIZIE(256k)",
+        "title": "MOSES_BLISS_-_MIRACLE_NO_DEY_TIRE_JESUS_[Official_Video]_x_FESTIZIE_x_CHIZIE(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\MOSES_BLISS_-_MIRACLE_NO_DEY_TIRE_JESUS_[Official_Video]_x_FESTIZIE_x_CHIZIE(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "My Jesus",
+        "title": "My Jesus",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\My Jesus.mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Phil_Wickham_-_What_An_Awesome_God__Official_Lyric_Video_(256k)",
+        "title": "Phil_Wickham_-_What_An_Awesome_God__Official_Lyric_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Phil_Wickham_-_What_An_Awesome_God__Official_Lyric_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Praise__feat._Brandon_Lake,_Chris_Brown___Chandler_Moore____Elevation_Worship(256k)",
+        "title": "Praise__feat._Brandon_Lake,_Chris_Brown___Chandler_Moore____Elevation_Worship(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Praise__feat._Brandon_Lake,_Chris_Brown___Chandler_Moore____Elevation_Worship(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Rihanna___Justin_Bieber_-_Jesus_the_truth_and_light___official_video__(256k)",
+        "title": "Rihanna___Justin_Bieber_-_Jesus_the_truth_and_light___official_video__(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Rihanna___Justin_Bieber_-_Jesus_the_truth_and_light___official_video__(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "Shakira_-_Try_Everything__Official_Video_(256k)",
+        "title": "Shakira_-_Try_Everything__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Shakira_-_Try_Everything__Official_Video_(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "We_will_be_many_official_dance_video____Sounds_Of_Salem(256k)",
+        "title": "We_will_be_many_official_dance_video____Sounds_Of_Salem(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\We_will_be_many_official_dance_video____Sounds_Of_Salem(256k).mp3",
+        "added_at": 1774115641
+      },
+      {
+        "id": "You do this one_-_Mercy",
+        "title": "You do this one_-_Mercy",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\You do this one_-_Mercy.aac",
+        "added_at": 1774115641
+      },
+      {
+        "id": "You_Say__Lauren_Daigle____One_Voice_Children_s_Choir_cover(256k)",
+        "title": "You_Say__Lauren_Daigle____One_Voice_Children_s_Choir_cover(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\You_Say__Lauren_Daigle____One_Voice_Children_s_Choir_cover(256k).mp3",
+        "added_at": 1774115641
+      }
+    ],
+    "created_at": 1774115641,
+    "play_count": 3
+  },
+  "playlist de travail": {
+    "id": "playlist de travail",
+    "name": "playlist de travail",
+    "songs": [],
+    "created_at": 1774115737,
+    "play_count": 0
+  },
+  "coding hit": {
+    "id": "coding hit",
+    "name": "coding hit",
+    "songs": [
+      {
+        "id": "18 ON MY MATTER",
+        "title": "18 ON MY MATTER",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\18 ON MY MATTER.mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Ada_Ehi_-_OPEN_DOORS_(The_Official)_Lyrics_Video(128k)",
+        "title": "Ada_Ehi_-_OPEN_DOORS_(The_Official)_Lyrics_Video(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Ada_Ehi_-_OPEN_DOORS_(The_Official)_Lyrics_Video(128k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "ADA_EHI_-_The_Final_Say_(The_Official_Video)(360p)",
+        "title": "ADA_EHI_-_The_Final_Say_(The_Official_Video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\ADA_EHI_-_The_Final_Say_(The_Official_Video)(360p).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Ada_Ehi_ft_Dena_Mwana_-_Another_Miracle___The_Official_Video(256k)",
+        "title": "Ada_Ehi_ft_Dena_Mwana_-_Another_Miracle___The_Official_Video(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Ada_Ehi_ft_Dena_Mwana_-_Another_Miracle___The_Official_Video(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "BACK_WITH_YOUR_TESTIMONY_BY_DR_PAUL_ENENCHE(128k)",
+        "title": "BACK_WITH_YOUR_TESTIMONY_BY_DR_PAUL_ENENCHE(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\BACK_WITH_YOUR_TESTIMONY_BY_DR_PAUL_ENENCHE(128k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Big_God_-_Tim_Godfrey_X_Fearless_Community_ft._Anderson(256k)",
+        "title": "Big_God_-_Tim_Godfrey_X_Fearless_Community_ft._Anderson(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Big_God_-_Tim_Godfrey_X_Fearless_Community_ft._Anderson(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "CeCe_Winans_-_Goodness_of_God__Official_Video_(256k)",
+        "title": "CeCe_Winans_-_Goodness_of_God__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\CeCe_Winans_-_Goodness_of_God__Official_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "CeCe_Winans_-_That_s_My_King__Official_Video_(256k)",
+        "title": "CeCe_Winans_-_That_s_My_King__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\CeCe_Winans_-_That_s_My_King__Official_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Charlie_Puth___Wiz_Khalifa_-_See_You_Again___One_Voice_Children_s_Choir_Cover__Official_Music_Video_(128k)",
+        "title": "Charlie_Puth___Wiz_Khalifa_-_See_You_Again___One_Voice_Children_s_Choir_Cover__Official_Music_Video_(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Charlie_Puth___Wiz_Khalifa_-_See_You_Again___One_Voice_Children_s_Choir_Cover__Official_Music_Video_(128k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Chidinma_&_Indira_-_Over_and_Over_(Official_Video)(360p)",
+        "title": "Chidinma_&_Indira_-_Over_and_Over_(Official_Video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Chidinma_&_Indira_-_Over_and_Over_(Official_Video)(360p).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Chidinma_feat._KS_Bloom_-_Blessings_Follow_Me_(Official_Video)(360p)",
+        "title": "Chidinma_feat._KS_Bloom_-_Blessings_Follow_Me_(Official_Video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Chidinma_feat._KS_Bloom_-_Blessings_Follow_Me_(Official_Video)(360p).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Chosen_Family_-_Rina_Sawayama___Elton_John___One_Voice_Childrens_Choir___Kids_Cover__Official_Video_(256k)",
+        "title": "Chosen_Family_-_Rina_Sawayama___Elton_John___One_Voice_Childrens_Choir___Kids_Cover__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Chosen_Family_-_Rina_Sawayama___Elton_John___One_Voice_Childrens_Choir___Kids_Cover__Official_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "DARLING_JESUS_-_SON_Music_ft._Neeja_[Official_Video]_________#spotlitenation_#darlingJesus(256k)",
+        "title": "DARLING_JESUS_-_SON_Music_ft._Neeja_[Official_Video]_________#spotlitenation_#darlingJesus(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DARLING_JESUS_-_SON_Music_ft._Neeja_[Official_Video]_________#spotlitenation_#darlingJesus(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "DEBORAH_LUKALU_-_RESTAURÉ_《TRUST_IN_THE_STORM_》(256k)",
+        "title": "DEBORAH_LUKALU_-_RESTAURÉ_《TRUST_IN_THE_STORM_》(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DEBORAH_LUKALU_-_RESTAURÉ_《TRUST_IN_THE_STORM_》(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "DEFE_DEFE__Lyric_Video__-_Team_Eternity___Speed_up_Afro_mix(256k)",
+        "title": "DEFE_DEFE__Lyric_Video__-_Team_Eternity___Speed_up_Afro_mix(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DEFE_DEFE__Lyric_Video__-_Team_Eternity___Speed_up_Afro_mix(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "DEFINITELY_-_ADA_EHI____The_Official_Music_Video(256k)",
+        "title": "DEFINITELY_-_ADA_EHI____The_Official_Music_Video(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\DEFINITELY_-_ADA_EHI____The_Official_Music_Video(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Dena_Mwana_-__Emmanuel__feat_El_Georges__Clip_Officiel(256k)",
+        "title": "Dena_Mwana_-__Emmanuel__feat_El_Georges__Clip_Officiel(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Dena_Mwana_-__Emmanuel__feat_El_Georges__Clip_Officiel(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Fake it",
+        "title": "Fake it",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Fake it.mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Faveur_Mukoko_-_Rémunérateur___Clip_Officiel_(256k)",
+        "title": "Faveur_Mukoko_-_Rémunérateur___Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Faveur_Mukoko_-_Rémunérateur___Clip_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Glorious",
+        "title": "Glorious",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Glorious.mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Golden__Netflix_K-Pop_Demon_Hunters____One_Voice_Children’s_Choir__Official_Music_Video_(256k)",
+        "title": "Golden__Netflix_K-Pop_Demon_Hunters____One_Voice_Children’s_Choir__Official_Music_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Golden__Netflix_K-Pop_Demon_Hunters____One_Voice_Children’s_Choir__Official_Music_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "I will sing ___Ada",
+        "title": "I will sing ___Ada",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\I will sing ___Ada.aac",
+        "added_at": 1774117077
+      },
+      {
+        "id": "In Jesus Name",
+        "title": "In Jesus Name",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\In Jesus Name.mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "INDIRA_-_IL_EST_LÀ_(Remix)_feat._KS_BLOOM_(Official_Video)(128k)",
+        "title": "INDIRA_-_IL_EST_LÀ_(Remix)_feat._KS_BLOOM_(Official_Video)(128k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\INDIRA_-_IL_EST_LÀ_(Remix)_feat._KS_BLOOM_(Official_Video)(128k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "INDIRA_-_Pour_La_Gloire_De_Dieu__Clip_Officiel_(256k)",
+        "title": "INDIRA_-_Pour_La_Gloire_De_Dieu__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\INDIRA_-_Pour_La_Gloire_De_Dieu__Clip_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Jireh___Elevation_Worship___Maverick_City(256k)",
+        "title": "Jireh___Elevation_Worship___Maverick_City(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Jireh___Elevation_Worship___Maverick_City(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "JOSIANE_NSIMBA___EXAGERE_ENCORE___CLIP_OFFICIEL_(256k)",
+        "title": "JOSIANE_NSIMBA___EXAGERE_ENCORE___CLIP_OFFICIEL_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\JOSIANE_NSIMBA___EXAGERE_ENCORE___CLIP_OFFICIEL_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Justin_Bieber_-_Anyone___One_Voice_Children_s_Choir_Cover(256k)",
+        "title": "Justin_Bieber_-_Anyone___One_Voice_Children_s_Choir_Cover(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Justin_Bieber_-_Anyone___One_Voice_Children_s_Choir_Cover(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Katy_Nichole___Big_Daddy_Weave_-__God_Is_In_The_Story___Official_Lyric_Video_(256k)",
+        "title": "Katy_Nichole___Big_Daddy_Weave_-__God_Is_In_The_Story___Official_Lyric_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Katy_Nichole___Big_Daddy_Weave_-__God_Is_In_The_Story___Official_Lyric_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "KS_BLOOM_-_C'est_Tchor_Feat_MORIJAH_(Lyrics)(256k)",
+        "title": "KS_BLOOM_-_C'est_Tchor_Feat_MORIJAH_(Lyrics)(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-_C'est_Tchor_Feat_MORIJAH_(Lyrics)(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "KS_BLOOM_-_Commando__Clip_Officiel_(256k)",
+        "title": "KS_BLOOM_-_Commando__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-_Commando__Clip_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "KS_BLOOM_-_C’est_Dieu_remix_(_Official_Video)_ft._CHIDINMA(360p)",
+        "title": "KS_BLOOM_-_C’est_Dieu_remix_(_Official_Video)_ft._CHIDINMA(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-_C’est_Dieu_remix_(_Official_Video)_ft._CHIDINMA(360p).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "KS_BLOOM_-ohh_la_MISÉRICORDE_(_official_video)(360p)",
+        "title": "KS_BLOOM_-ohh_la_MISÉRICORDE_(_official_video)(360p)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\KS_BLOOM_-ohh_la_MISÉRICORDE_(_official_video)(360p).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Limoblaze,_Lecrae,_Happi_-_Jireh__My_Provider__[Official_Video](256k)",
+        "title": "Limoblaze,_Lecrae,_Happi_-_Jireh__My_Provider__[Official_Video](256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Limoblaze,_Lecrae,_Happi_-_Jireh__My_Provider__[Official_Video](256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Mandisa_-_Overcomer(256k)",
+        "title": "Mandisa_-_Overcomer(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Mandisa_-_Overcomer(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Mandisa_-_Press_On__Audio_(256k)",
+        "title": "Mandisa_-_Press_On__Audio_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Mandisa_-_Press_On__Audio_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Morijah_-_Abonde_en_moi__Audio_Officiel_(256k)",
+        "title": "Morijah_-_Abonde_en_moi__Audio_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_Abonde_en_moi__Audio_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Morijah_-_En_Toi__Clip_Officiel_(256k)",
+        "title": "Morijah_-_En_Toi__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_En_Toi__Clip_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Morijah_-_Parcours__Clip_Officiel_(256k)",
+        "title": "Morijah_-_Parcours__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_Parcours__Clip_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Morijah_-_Reconnaissance__Clip_Officiel__feat._David_Okit(256k)",
+        "title": "Morijah_-_Reconnaissance__Clip_Officiel__feat._David_Okit(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah_-_Reconnaissance__Clip_Officiel__feat._David_Okit(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Morijah___Dena_Mwana_-_Tout_Nouveau_Tout_Beau__Clip_Officiel_(256k)",
+        "title": "Morijah___Dena_Mwana_-_Tout_Nouveau_Tout_Beau__Clip_Officiel_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Morijah___Dena_Mwana_-_Tout_Nouveau_Tout_Beau__Clip_Officiel_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "MOSES_BLISS_-_MIRACLE_NO_DEY_TIRE_JESUS_[Official_Video]_x_FESTIZIE_x_CHIZIE(256k)",
+        "title": "MOSES_BLISS_-_MIRACLE_NO_DEY_TIRE_JESUS_[Official_Video]_x_FESTIZIE_x_CHIZIE(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\MOSES_BLISS_-_MIRACLE_NO_DEY_TIRE_JESUS_[Official_Video]_x_FESTIZIE_x_CHIZIE(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "My Jesus",
+        "title": "My Jesus",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\My Jesus.mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Phil_Wickham_-_What_An_Awesome_God__Official_Lyric_Video_(256k)",
+        "title": "Phil_Wickham_-_What_An_Awesome_God__Official_Lyric_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Phil_Wickham_-_What_An_Awesome_God__Official_Lyric_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Praise__feat._Brandon_Lake,_Chris_Brown___Chandler_Moore____Elevation_Worship(256k)",
+        "title": "Praise__feat._Brandon_Lake,_Chris_Brown___Chandler_Moore____Elevation_Worship(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Praise__feat._Brandon_Lake,_Chris_Brown___Chandler_Moore____Elevation_Worship(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Rihanna___Justin_Bieber_-_Jesus_the_truth_and_light___official_video__(256k)",
+        "title": "Rihanna___Justin_Bieber_-_Jesus_the_truth_and_light___official_video__(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Rihanna___Justin_Bieber_-_Jesus_the_truth_and_light___official_video__(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "Shakira_-_Try_Everything__Official_Video_(256k)",
+        "title": "Shakira_-_Try_Everything__Official_Video_(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\Shakira_-_Try_Everything__Official_Video_(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "We_will_be_many_official_dance_video____Sounds_Of_Salem(256k)",
+        "title": "We_will_be_many_official_dance_video____Sounds_Of_Salem(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\We_will_be_many_official_dance_video____Sounds_Of_Salem(256k).mp3",
+        "added_at": 1774117077
+      },
+      {
+        "id": "You do this one_-_Mercy",
+        "title": "You do this one_-_Mercy",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\You do this one_-_Mercy.aac",
+        "added_at": 1774117077
+      },
+      {
+        "id": "You_Say__Lauren_Daigle____One_Voice_Children_s_Choir_cover(256k)",
+        "title": "You_Say__Lauren_Daigle____One_Voice_Children_s_Choir_cover(256k)",
+        "artist": "",
+        "album": "",
+        "path": "C:\\Users\\USER\\Music\\You_Say__Lauren_Daigle____One_Voice_Children_s_Choir_cover(256k).mp3",
+        "added_at": 1774117077
+      }
+    ],
+    "created_at": 1774116682,
+    "play_count": 2
+  }
+}

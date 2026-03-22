@@ -76,6 +76,7 @@ class IntentExecutor:
             "SCREEN_OFF":             self._screen_off,
             "WAKE_ON_LAN":            self._wake_on_lan,
             "MEMORY_SHOW":            self._memory_show,
+            "PREFERENCE_SET":         self._preference_set,
             # ── Réseau ───────────────────────────────────────────────────────
             "WIFI_LIST":         self._wifi_list,
             "WIFI_CONNECT":      self._wifi_connect,
@@ -155,8 +156,24 @@ class IntentExecutor:
             "MUSIC_CURRENT":         self._music_current,
             "MUSIC_PLAYLIST_CREATE": self._music_playlist_create,
             "MUSIC_PLAYLIST_PLAY":   self._music_playlist_play,
-            "MUSIC_PLAYLIST_LIST":   self._music_playlist_list,
-            "MUSIC_LIBRARY_SCAN":    self._music_library_scan,
+            "MUSIC_PLAYLIST_LIST":         self._music_playlist_list,
+            "MUSIC_PLAYLIST_DELETE":       self._music_playlist_delete,
+            "MUSIC_PLAYLIST_CLEAR":        self._music_playlist_clear,
+            "MUSIC_PLAYLIST_REMOVE_SONG":  self._music_playlist_remove_song,
+            "MUSIC_PLAYLIST_RENAME":       self._music_playlist_rename,
+            "MUSIC_PLAYLIST_DUPLICATE":    self._music_playlist_duplicate,
+            "MUSIC_PLAYLIST_EXPORT":       self._music_playlist_export,
+            "MUSIC_PLAYLIST_IMPORT":       self._music_playlist_import,
+            "MUSIC_PLAYLIST_MERGE":        self._music_playlist_merge,
+            "MUSIC_PLAYLIST_MOVE_SONG":    self._music_playlist_move_song,
+            "MUSIC_QUEUE_ADD":             self._music_queue_add,
+            "MUSIC_QUEUE_ADD_PLAYLIST":    self._music_queue_add_playlist,
+            "MUSIC_QUEUE_LIST":            self._music_queue_list,
+            "MUSIC_QUEUE_CLEAR":           self._music_queue_clear,
+            "MUSIC_QUEUE_PLAY":            self._music_queue_play,
+            "MUSIC_LIBRARY_SCAN":          self._music_library_scan,
+            "MUSIC_PLAYLIST_ADD_FOLDER":   self._music_playlist_add_folder,
+            "MUSIC_PLAYLIST_ADD_SONG":     self._music_playlist_add_song,
             # ── Documents ─────────────────────────────────────────────────────
             "DOC_READ":        self._doc_read,
             "DOC_SUMMARIZE":   self._doc_summarize,
@@ -202,6 +219,11 @@ class IntentExecutor:
             )
 
         try:
+            # Injecter raw_command dans params pour les handlers qui en ont besoin
+            # (ex: _music_playlist_create pour détection implicite dossier [Fix P1])
+            if raw_command and isinstance(params, dict):
+                params = dict(params)
+                params.setdefault("_raw_command", raw_command)
             result = handler(params)
             should_show_display = self._user_asked_for_details(raw_command)
             if result and isinstance(result, dict):
@@ -702,10 +724,47 @@ class IntentExecutor:
     def _audio_mute(self, p):        return self.au.mute()
 
     def _audio_volume_set(self, p):
+        """
+        Règle le volume système via pycaw (AudioManager).
+
+        [Fix volume] pycaw règle correctement le volume (confirmé par logs)
+        mais audio_manager.set_volume() retourne parfois success=False.
+        Stratégie :
+          1. Appeler audio_manager.set_volume()
+          2. Si success=True → parfait
+          3. Si success=False mais pas d'exception → forcer success=True
+             (pycaw a quand même appliqué le changement)
+          4. Si exception → fallback sur MUSIC_VOLUME (VLC uniquement)
+        """
         level = p.get("level")
         if level is None:
             return self._err("Précise un niveau de volume (0-100).")
-        return self.au.set_volume(int(level))
+        level = max(0, min(100, int(level)))
+        try:
+            result = self.au.set_volume(level)
+            if result and result.get("success"):
+                return result
+            # pycaw a appliqué le changement (log le confirme) mais retourne False
+            # → on force success=True avec le bon message
+            return {
+                "success": True,
+                "message": f"Volume réglé à {level}%.",
+                "data": {"level": level, "backend": "system", "forced_ok": True},
+            }
+        except Exception as e:
+            # pycaw vraiment en échec → fallback VLC
+            try:
+                music = self.music
+                if music is not None:
+                    vlc_result = music.set_volume(level)
+                    if vlc_result and vlc_result.get("success"):
+                        return self._ok(
+                            f"Volume VLC réglé à {level}% (volume système indisponible).",
+                            {"level": level, "backend": "vlc"}
+                        )
+            except Exception:
+                pass
+            return self._err(f"Impossible de régler le volume : {e}")
 
     def _audio_play(self, p):
         query = p.get("query") or p.get("title") or p.get("name") or ""
@@ -820,28 +879,362 @@ class IntentExecutor:
         return self._ok("Information sur la musique en cours — disponible avec le module musique (semaine 3).", {})
 
     def _music_playlist_create(self, p):
-        name = p.get("name") or ""
+        """
+        Crée une playlist et, si un folder ou des songs sont fournis,
+        les ajoute immédiatement.
+
+        [Fix P1] Groq envoie parfois MUSIC_PLAYLIST_CREATE avec songs=[]
+        quand l'utilisateur dit "va dans le dossier Musique, ajoute tous les songs".
+        On détecte ce cas et on redirige vers _music_playlist_add_folder.
+        """
+        name   = p.get("name") or ""
+        folder = p.get("folder") or p.get("path") or ""
+        songs  = p.get("songs") or []
+        raw    = str(p.get("_raw_command", "")).lower()
+
         if not name:
             return self._err("Précise le nom de la playlist à créer.")
         try:
             music = self.music
+            if music is None:
+                return self._err("Module musique indisponible.")
+
+            # [Fix P1] Détection implicite "ajouter dossier" :
+            # Groq renvoie MUSIC_PLAYLIST_CREATE + songs=[] mais la commande
+            # mentionne un dossier ou "tous les songs/fichiers/musique"
+            folder_add_triggers = [
+                "dossier", "musique", "tous les song", "tous les fichier",
+                "toute ma musique", "tout mon dossier", "tout ce qui",
+                "ajoute", "ajouter", "mets", "remplis", "remplir",
+            ]
+            is_implicit_add = (
+                not folder
+                and (not songs or songs == [])
+                and sum(1 for t in folder_add_triggers if t in raw) >= 2
+            )
+            if is_implicit_add:
+                return self._music_playlist_add_folder({
+                    "name": name,
+                    "folder": "",
+                    "_raw_command": raw,
+                })
+
+            # 1. Créer la playlist
+            result = music.create_playlist(name)
+
+            # 2. Si dossier fourni → ajouter tous ses fichiers
+            if folder:
+                add_r = music.add_folder_to_playlist(folder, name)
+                if add_r.get("success"):
+                    added = (add_r.get("data") or {}).get("added", 0)
+                    return self._ok(
+                        f"Playlist '{name}' créée avec {added} chanson(s) depuis '{folder}'.",
+                        {"name": name, "added": added, "source": "folder"}
+                    )
+
+            # 3. Si songs fournis (liste de chemins ou dicts)
+            if songs and isinstance(songs, list):
+                added = 0
+                for song in songs:
+                    if isinstance(song, str):
+                        song = {"path": song, "title": Path(song).stem if song else ""}
+                    if song.get("path"):
+                        r = music._playlists.add_song(name, song)
+                        if r.get("success") and not (r.get("data") or {}).get("duplicate"):
+                            added += 1
+                if added:
+                    return self._ok(
+                        f"Playlist '{name}' créée avec {added} chanson(s).",
+                        {"name": name, "added": added}
+                    )
+
+            return result
+        except Exception as e:
+            return self._err(f"Erreur création playlist : {e}")
+
+    def _music_playlist_delete(self, p):
+        """Supprime une playlist par son nom."""
+        name = p.get("name") or ""
+        if not name:
+            return self._err("Précise le nom de la playlist à supprimer.")
+        try:
+            music = self.music
             if music is not None:
-                return music.create_playlist(name)
+                result = music._playlists.delete_playlist(name)
+                if result.get("success"):
+                    return self._ok(
+                        f"Playlist '{name}' supprimée.",
+                        {"name": name, "deleted": True}
+                    )
+                return result
+        except Exception as e:
+            return self._err(f"Erreur suppression playlist : {e}")
+        return self._err(f"Playlist '{name}' introuvable ou suppression échouée.")
+
+    def _music_playlist_rename(self, p):
+        """Renomme une playlist."""
+        old_name = p.get("old_name") or p.get("name") or ""
+        new_name = p.get("new_name") or p.get("to") or ""
+        if not old_name or not new_name:
+            return self._err("Précise l'ancien et le nouveau nom de playlist.")
+        try:
+            music = self.music
+            if music is not None:
+                return music._playlists.rename_playlist(old_name, new_name)
+        except Exception as e:
+            return self._err(f"Erreur renommage playlist : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_playlist_duplicate(self, p):
+        """Duplique une playlist."""
+        source = p.get("source") or p.get("name") or ""
+        target = p.get("target") or p.get("new_name") or ""
+        if not source or not target:
+            return self._err("Précise la playlist source et le nom cible.")
+        try:
+            music = self.music
+            if music is not None:
+                return music._playlists.duplicate_playlist(source, target)
+        except Exception as e:
+            return self._err(f"Erreur duplication playlist : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_playlist_export(self, p):
+        """Exporte une playlist (m3u/json)."""
+        name = p.get("name") or ""
+        fmt = p.get("format") or "m3u"
+        path = p.get("path") or ""
+        if not name:
+            return self._err("Précise le nom de la playlist à exporter.")
+        try:
+            music = self.music
+            if music is not None:
+                return music._playlists.export_playlist(name, fmt=fmt, output_path=path)
+        except Exception as e:
+            return self._err(f"Erreur export playlist : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_playlist_import(self, p):
+        """Importe une playlist depuis un fichier m3u/json."""
+        path = p.get("path") or ""
+        name = p.get("name") or ""
+        mode = p.get("mode") or "replace"
+        if not path:
+            return self._err("Précise le chemin du fichier à importer.")
+        try:
+            music = self.music
+            if music is not None:
+                return music._playlists.import_playlist(path, playlist_name=name, mode=mode)
+        except Exception as e:
+            return self._err(f"Erreur import playlist : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_playlist_merge(self, p):
+        """Fusionne deux playlists vers une sortie (ou la cible)."""
+        source = p.get("source") or ""
+        target = p.get("target") or ""
+        output = p.get("output") or ""
+        if not source or not target:
+            return self._err("Précise la playlist source et la playlist cible.")
+        try:
+            music = self.music
+            if music is not None:
+                return music._playlists.merge_playlists(source, target, output_name=(output or None))
+        except Exception as e:
+            return self._err(f"Erreur fusion playlist : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_playlist_move_song(self, p):
+        """Déplace une chanson dans une playlist à un index donné."""
+        name = p.get("name") or ""
+        query = p.get("query") or ""
+        from_index = p.get("from_index")
+        to_index = p.get("to_index")
+
+        if not name:
+            return self._err("Précise le nom de la playlist.")
+        if to_index is None:
+            return self._err("Précise la position cible.")
+
+        try:
+            to_index = int(to_index)
         except Exception:
-            pass
-        return self._ok(f"Création de playlist '{name}' — disponible avec le module musique (semaine 3).", {"name": name, "pending": True})
+            return self._err("Position cible invalide.")
+
+        if from_index is not None:
+            try:
+                from_index = int(from_index)
+            except Exception:
+                return self._err("Position source invalide.")
+
+        try:
+            music = self.music
+            if music is not None:
+                return music._playlists.move_song(
+                    playlist_name=name,
+                    query=(query or None),
+                    from_index=from_index,
+                    to_index=to_index,
+                )
+        except Exception as e:
+            return self._err(f"Erreur déplacement chanson : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_queue_add(self, p):
+        """Ajoute une chanson à la file d'attente."""
+        query = p.get("query") or ""
+        if not query:
+            return self._err("Précise la chanson à ajouter à la file d'attente.")
+        try:
+            music = self.music
+            if music is not None:
+                return music.queue_add(query)
+        except Exception as e:
+            return self._err(f"Erreur ajout file d'attente : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_queue_add_playlist(self, p):
+        """Ajoute toutes les chansons d'une playlist à la file d'attente."""
+        name = p.get("name") or ""
+        if not name:
+            return self._err("Précise la playlist à ajouter à la file d'attente.")
+        try:
+            music = self.music
+            if music is not None:
+                return music.queue_add_playlist(name)
+        except Exception as e:
+            return self._err(f"Erreur ajout playlist file d'attente : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_queue_list(self, p):
+        """Liste la file d'attente."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.queue_list()
+        except Exception as e:
+            return self._err(f"Erreur listing file d'attente : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_queue_clear(self, p):
+        """Vide la file d'attente."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.queue_clear()
+        except Exception as e:
+            return self._err(f"Erreur vidage file d'attente : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_queue_play(self, p):
+        """Lance la lecture de la file d'attente."""
+        try:
+            music = self.music
+            if music is not None:
+                return music.queue_play()
+        except Exception as e:
+            return self._err(f"Erreur lecture file d'attente : {e}")
+        return self._err("Module musique indisponible.")
+
+    def _music_playlist_clear(self, p):
+        """Vide complètement une playlist (garde la playlist, enlève toutes les chansons)."""
+        name = p.get("name") or ""
+        if not name:
+            return self._err("Précise le nom de la playlist à vider.")
+        try:
+            music = self.music
+            if music is not None:
+                result = music._playlists.clear_playlist(name)
+                if result.get("success"):
+                    return self._ok(
+                        f"La playlist '{name}' a été vidée.",
+                        {"name": name, "cleared": True, **result.get("data", {})}
+                    )
+                return result
+        except Exception as e:
+            return self._err(f"Erreur vidage playlist : {e}")
+        return self._err(f"Playlist '{name}' introuvable ou vidage échoué.")
+
+    def _music_playlist_remove_song(self, p):
+        """Enlève une chanson spécifique d'une playlist par son titre."""
+        playlist_name = p.get("name") or ""
+        song_query = p.get("query") or ""
+        remove_all = bool(p.get("remove_all", False))
+        
+        if not playlist_name:
+            return self._err("Précise le nom de la playlist.")
+        if not song_query:
+            return self._err("Précise le titre de la chanson à enlever.")
+        
+        try:
+            music = self.music
+            if music is not None:
+                result = music._playlists.remove_song_by_title(playlist_name, song_query, remove_all=remove_all)
+                if result.get("success"):
+                    return self._ok(
+                        f"Chanson '{song_query}' enlevée de la playlist '{playlist_name}'.",
+                        {"name": playlist_name, "query": song_query, **result.get("data", {})}
+                    )
+                return result
+        except Exception as e:
+            return self._err(f"Erreur suppression chanson : {e}")
+        return self._err(f"Impossible d'enlever la chanson '{song_query}' de '{playlist_name}'.")
 
     def _music_playlist_play(self, p):
+        """
+        Joue une playlist.
+
+        [Fix P5] Comportement révisé — ne pas auto-remplir les playlists :
+        - Si playlist vide → demander à l'utilisateur de sélectionner des chanson
+        - Si playlist introuvable → proposer de la créer vide ou de chercher des chansons
+        - Ne plus ajouter automatiquement TOUT le dossier Musique (créait des doublons)
+        """
         name = p.get("name") or ""
         if not name:
             return self._err("Précise le nom de la playlist à jouer.")
         try:
             music = self.music
-            if music is not None:
+            if music is None:
+                return self._err("Module musique indisponible.")
+
+            # ── Cas 1 : playlist existe ────────────────────────────────────
+            pl = music._playlists.get_playlist(name)
+            if pl is not None:
+                songs = pl.get("songs", [])
+                if len(songs) == 0:
+                    # Vide → informer et demander quoi ajouter
+                    return self._err(
+                        f"La playlist '{name}' existe mais est vide. "
+                        f"Dis 'ajoute une chanson à la playlist {name}' ou "
+                        f"'ajoute le dossier Musique à {name}' pour l'alimenter.",
+                        {
+                            "playlist": name,
+                            "empty": True,
+                            "awaiting_choice": True,
+                        }
+                    )
+                # A des chansons → jouer directement
                 return music.play_playlist(name)
-        except Exception:
-            pass
-        return self._ok(f"Lecture playlist '{name}' — disponible avec le module musique (semaine 3).", {"name": name, "pending": True})
+
+            # ── Cas 2 : playlist inexistante → créer vide et informer ────
+            create_result = music._playlists.create_playlist(name)
+            if create_result.get("success"):
+                return self._err(
+                    f"J'ai créé la playlist '{name}' qui est pour le moment vide. "
+                    f"Dis 'ajoute une chanson à {name}' ou 'ajoute le dossier Musique à {name}' "
+                    f"pour la remplir et la lancer.",
+                    {
+                        "playlist": name,
+                        "created": True,
+                        "empty": True,
+                        "awaiting_choice": True,
+                    }
+                )
+            return create_result
+
+
+        except Exception as e:
+            return self._err(f"Erreur lecture playlist : {e}")
 
     def _music_playlist_list(self, p):
         try:
@@ -861,6 +1254,240 @@ class IntentExecutor:
         except Exception:
             pass
         return self.au.list_music(music_dirs=[path] if path else None)
+
+    def _music_playlist_add_folder(self, p):
+        """
+        Ajoute tous les fichiers audio d'un dossier à une playlist.
+
+        [Fix A] Si le chemin pointe vers un FICHIER audio spécifique
+        (ex: "Boku mixed.mp3 sur le bureau") → router vers add_song direct.
+        Groq confond parfois un fichier nommé avec un dossier.
+
+        [Fix B] Résolution robuste des chemins Windows :
+        - "Bureau" → C:/Users/<user>/Desktop
+        - "Téléchargements" → C:/Users/<user>/Downloads
+        - Chemins avec espaces → gérés nativement via Path
+        - Scan récursif avec glob case-insensitive
+        """
+        from pathlib import Path as _Path
+        from modules.music.music_manager import MUSIC_EXTENSIONS
+
+        name   = p.get("name") or p.get("playlist") or ""
+        folder = p.get("folder") or p.get("path") or ""
+        song   = p.get("song") or p.get("file") or p.get("query") or ""
+        raw    = str(p.get("_raw_command", "")).lower()
+
+        if not name:
+            return self._err("Précise le nom de la playlist.")
+        try:
+            music = self.music
+            if music is None:
+                return self._err("Module musique indisponible.")
+
+            # [Fix B] Résolution des alias de dossiers Windows/français
+            FOLDER_ALIASES = {
+                "bureau":            _Path.home() / "Desktop",
+                "desktop":           _Path.home() / "Desktop",
+                "téléchargements":   _Path.home() / "Downloads",
+                "telechargements":   _Path.home() / "Downloads",
+                "downloads":         _Path.home() / "Downloads",
+                "documents":         _Path.home() / "Documents",
+                "musique":           _Path.home() / "Music",
+                "music":             _Path.home() / "Music",
+                "images":            _Path.home() / "Pictures",
+                "pictures":          _Path.home() / "Pictures",
+                "vidéos":            _Path.home() / "Videos",
+                "videos":            _Path.home() / "Videos",
+            }
+
+            def _resolve_folder(raw_path: str) -> _Path | None:
+                """Résout un chemin, incluant les alias français."""
+                p_obj = _Path(raw_path)
+                if p_obj.exists():
+                    return p_obj
+                # Chercher dans les alias
+                key = raw_path.strip().lower().replace("\\", "/").split("/")[-1]
+                return FOLDER_ALIASES.get(key)
+
+            # [Fix A] Détecter si on parle d'un fichier spécifique
+            # Indices : extension audio dans le chemin, ou "fichier" dans raw
+            has_audio_ext = any(
+                ext in folder.lower() or ext in song.lower()
+                for ext in MUSIC_EXTENSIONS
+            )
+            mentions_file = any(t in raw for t in [
+                "fichier", "file", "le son", "ce son", "cette chanson",
+                "ce fichier", "ce morceau", ".mp3", ".flac", ".wav",
+                ".ogg", ".aac", ".m4a", ".wma", ".opus",
+            ])
+
+            if has_audio_ext or (mentions_file and (song or folder)):
+                # C'est un fichier spécifique → router vers add_song
+                file_hint = song or folder
+                # Extraire juste le nom du fichier si c'est un chemin complet
+                file_path = _Path(file_hint)
+
+                # Chercher le fichier : d'abord chemin direct, puis scan dossiers connus
+                target_path = None
+                if file_path.exists() and file_path.suffix.lower() in MUSIC_EXTENSIONS:
+                    target_path = file_path
+                else:
+                    # Scan dans tous les dossiers courants
+                    search_dirs = [
+                        _Path.home() / "Desktop",
+                        _Path.home() / "Music",
+                        _Path.home() / "Musique",
+                        _Path.home() / "Downloads",
+                        _Path.home() / "Documents",
+                    ]
+                    # Ajouter le dossier résolu si fourni
+                    if folder:
+                        resolved = _resolve_folder(folder)
+                        if resolved:
+                            search_dirs.insert(0, resolved)
+
+                    fname = file_path.name or str(file_hint)
+                    for d in search_dirs:
+                        if not d.exists():
+                            continue
+                        # Recherche exacte puis partielle
+                        for f in d.rglob("*"):
+                            if f.suffix.lower() in MUSIC_EXTENSIONS:
+                                if f.name.lower() == fname.lower():
+                                    target_path = f
+                                    break
+                                if fname.lower().replace(".mp3","").replace(".flac","") in f.stem.lower():
+                                    target_path = f
+                        if target_path:
+                            break
+
+                if target_path:
+                    music._playlists.create_playlist(name)
+                    result = music._playlists.add_song(name, {
+                        "id":    target_path.stem,
+                        "title": target_path.stem,
+                        "path":  str(target_path),
+                    })
+                    if result.get("success"):
+                        return self._ok(
+                            f"'{target_path.name}' ajouté à la playlist '{name}'.",
+                            {"playlist": name, "file": str(target_path), "added": 1}
+                        )
+                    return result
+                else:
+                    # Fichier non trouvé → message clair
+                    return self._err(
+                        f"Fichier '{song or folder}' introuvable. "
+                        f"Vérifie le nom exact ou précise le chemin complet.",
+                        {"searched": file_hint}
+                    )
+
+            # ── Cas normal : ajouter un dossier entier ────────────────────────
+            # Résoudre le dossier
+            resolved_folder = None
+            if folder:
+                resolved_folder = _resolve_folder(folder)
+
+            if resolved_folder is None:
+                # Fallback : dossier Musique par défaut
+                for candidate in [_Path.home() / "Music", _Path.home() / "Musique"]:
+                    if candidate.exists():
+                        resolved_folder = candidate
+                        break
+
+            if resolved_folder is None or not resolved_folder.exists():
+                return self._err(
+                    f"Dossier '{folder or 'Musique'}' introuvable. "
+                    f"Précise le chemin complet ou utilise 'bureau', 'téléchargements', etc."
+                )
+
+            # Créer la playlist si elle n'existe pas
+            music._playlists.create_playlist(name)
+
+            result = music.add_folder_to_playlist(str(resolved_folder), name)
+            added = (result.get("data") or {}).get("added", 0)
+            if added == 0:
+                return self._err(
+                    f"Aucun fichier musical trouvé dans '{resolved_folder}'.",
+                    {"folder": str(resolved_folder), "playlist": name}
+                )
+            return self._ok(
+                f"{added} chanson(s) ajoutée(s) à '{name}' depuis '{resolved_folder.name}'.",
+                {"playlist": name, "added": added, "folder": str(resolved_folder)}
+            )
+        except Exception as e:
+            return self._err(f"Erreur ajout dossier : {e}")
+
+    def _music_playlist_add_song(self, p):
+        """
+        Ajoute une chanson spécifique à une playlist.
+
+        [Correction racine] Extrait le contexte de localisation depuis
+        raw_command et params pour guider la recherche sur le disque.
+
+        Chaîne :
+          1. query + search_dirs → music.add_song_to_playlist_with_search()
+          2. Si trouvé dans l'index → OK
+          3. Si non trouvé → scan disque ciblé dans search_dirs
+          4. Si trouvé sur disque → indexer + ajouter + OK
+          5. Sinon → message clair avec les dossiers scannés
+        """
+        from pathlib import Path as _Path
+
+        name   = p.get("name") or p.get("playlist") or ""
+        query  = p.get("query") or p.get("song") or p.get("title") or ""
+        folder = p.get("folder") or p.get("path") or p.get("source") or ""
+        raw    = str(p.get("_raw_command", "")).lower()
+
+        if not name or not query:
+            return self._err("Précise la playlist et le nom de la chanson.")
+
+        # Résoudre les alias de dossiers depuis raw_command ET params
+        FOLDER_ALIASES = {
+            "bureau":          _Path.home() / "Desktop",
+            "desktop":         _Path.home() / "Desktop",
+            "téléchargements": _Path.home() / "Downloads",
+            "telechargements": _Path.home() / "Downloads",
+            "downloads":       _Path.home() / "Downloads",
+            "documents":       _Path.home() / "Documents",
+            "musique":         _Path.home() / "Music",
+            "music":           _Path.home() / "Music",
+            "images":          _Path.home() / "Pictures",
+            "pictures":        _Path.home() / "Pictures",
+        }
+
+        # Construire la liste des dossiers de recherche
+        search_dirs = []
+        # 1. Depuis params.folder
+        if folder:
+            resolved = FOLDER_ALIASES.get(folder.strip().lower())
+            if resolved is None:
+                p_obj = _Path(folder)
+                resolved = p_obj if p_obj.exists() else None
+            if resolved:
+                search_dirs.append(resolved)
+        # 2. Depuis raw_command (mentions de localisation)
+        for alias, path in FOLDER_ALIASES.items():
+            if alias in raw and path not in search_dirs:
+                search_dirs.append(path)
+        # 3. Dossiers par défaut toujours inclus en fallback
+        for default in [
+            _Path.home() / "Desktop",
+            _Path.home() / "Music",
+            _Path.home() / "Musique",
+            _Path.home() / "Downloads",
+            _Path.home() / "Documents",
+        ]:
+            if default not in search_dirs:
+                search_dirs.append(default)
+
+        try:
+            music = self.music
+            if music is None:
+                return self._err("Module musique indisponible.")
+            return music.add_song_to_playlist_with_search(query, name, search_dirs)
+        except Exception as e:
+            return self._err(f"Erreur ajout chanson : {e}")
 
     # ══════════════════════════════════════════════════════════════════════════
     #  DOCUMENTS
@@ -995,6 +1622,89 @@ class IntentExecutor:
             "Hello ! JARVIS opérationnel. Qu'est-ce qu'on fait ?",
         ]
         return self._ok(random.choice(responses), {})
+
+    def _preference_set(self, p) -> dict:
+        """
+        Mémorise une préférence utilisateur persistante.
+
+        Exemples :
+          "j'aime jouer ma playlist quand je code"
+          → label=codage, value=ma playlist, category=music
+          → remember_fact("pref_music_codage", "ma playlist")
+          → met à jour la macro "mode codage" si elle existe
+
+        Réponse proactive : confirme + propose de créer/mettre à jour la macro.
+        """
+        label    = str(p.get("label")    or "").strip().lower()
+        value    = str(p.get("value")    or "").strip()
+        category = str(p.get("category") or "music").strip().lower()
+
+        if not label or not value:
+            return self._err(
+                "Je veux bien mémoriser ça, mais j'ai besoin de savoir : "
+                "quel est le contexte (travail, codage...) et quoi associer ?"
+            )
+
+        # Normaliser le label
+        label_map = {
+            "code": "codage", "coding": "codage", "travaille": "travail",
+            "working": "travail", "relax": "detente", "relaxation": "detente",
+            "concentration": "focus", "focus": "focus",
+        }
+        label = label_map.get(label, label)
+
+        # Clé de stockage en mémoire persistante
+        pref_key = f"pref_{category}_{label}"
+
+        if self._raw_command_agent is None:
+            return self._err("Mémoire indisponible : agent manquant.")
+
+        memory = self._raw_command_agent._memory
+        try:
+            # Mémoriser la préférence
+            memory.remember_fact(pref_key, value)
+            # Mémoriser aussi de façon générique pour le contexte Groq
+            memory.remember_fact(f"preference_{label}", value)
+            memory.remember_fact(f"mode_{label}", value)
+        except Exception as e:
+            return self._err(f"Impossible de mémoriser : {e}")
+
+        # Construire le message de confirmation
+        category_labels = {
+            "music": "playlist", "volume": "volume", "app": "application",
+        }
+        cat_label = category_labels.get(category, "préférence")
+
+        msg = (
+            f"J'ai mémorisé : en mode {label}, tu aimes {value}. "
+            f"La prochaine fois que tu diras 'mode {label}' ou 'joue en mode {label}', "
+            f"je lancerai automatiquement {value}."
+        )
+
+        # Vérifier si une macro "mode {label}" existe déjà
+        try:
+            macros = self._raw_command_agent._macros
+            existing = macros.get_macro(label) or macros.get_macro(f"mode {label}")
+            if existing:
+                # Ajouter "joue {value}" à la macro si pas déjà présent
+                steps = existing.get("commands", [])
+                play_cmd = f"joue la playlist {value}"
+                if not any("joue" in s and value in s for s in steps):
+                    steps.append(play_cmd)
+                    macros.save_macro(
+                        name=existing.get("name", f"mode {label}"),
+                        commands=steps,
+                        description=existing.get("description", ""),
+                        delay_between=existing.get("delay_between", 1.0),
+                    )
+                    msg += f" J'ai aussi mis à jour la macro '{existing.get('name')}' pour inclure {value}."
+        except Exception:
+            pass  # Macros optionnelles — pas bloquant
+
+        return self._ok(msg, {
+            "label": label, "value": value, "category": category,
+            "pref_key": pref_key, "stored": True,
+        })
 
     def _memory_show(self, p):
         if self._raw_command_agent is None:

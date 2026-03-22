@@ -362,8 +362,16 @@ class Agent:
             exec_result=result,
             conversation_history=self.context.history,
         )
-        result = dict(result)
+        result = dict(result) if result else {"success": False, "message": jarvis_message, "data": {}}
         result["message"] = jarvis_message
+        
+        # [FIX MUSIC_PLAYLIST_LIST] - Append display data if available
+        # Some intents (like MUSIC_PLAYLIST_LIST) have formatted display tables
+        # that should be shown to the user alongside the natural message
+        if result and isinstance(result, dict):
+            display_data = result.get("data", {}).get("display", "")
+            if display_data and isinstance(display_data, str):
+                result["message"] = f"{jarvis_message}\n\n{display_data}"
 
         # ── Mémoriser l'échange ───────────────────────────────────────────────
         self._update_navigation_context(intent, result)
@@ -643,6 +651,21 @@ class Agent:
                     "message": "Compris, je n'annule rien. Tu veux que j'ajoute seulement un rappel 5 minutes avant l'extinction ?",
                     "data": {"awaiting_choice": False, "kind": "cancel_blocked_by_negation"},
                 }
+
+        # [Fix P4] Guard rappel SYSTEM_SHUTDOWN : si params contient reminder=True
+        # c'est une demande de notification, pas une extinction.
+        # Jarvis ne peut pas encore créer de rappels système, mais ne doit pas
+        # re-programmer une extinction à 5 minutes.
+        if intent == "SYSTEM_SHUTDOWN" and params.get("reminder"):
+            return {
+                "success": True,
+                "message": (
+                    "J'ai bien noté que tu veux un rappel avant l'extinction programmée. "
+                    "La fonctionnalité de rappel système arrive bientôt. "
+                    "Pour l'instant, l'extinction à 4h est conservée telle quelle."
+                ),
+                "data": {"awaiting_choice": False, "kind": "reminder_not_yet_implemented"},
+            }
 
         # Suivi contextuel: "préviens/signal 5 minutes avant" ne doit pas
         # être interprété comme une nouvelle extinction à 240s.
@@ -1160,8 +1183,24 @@ class Agent:
         """
         If a folder is already open, an ambiguous "ouvre ..." should prioritize
         opening a file/folder inside that current directory.
+
+        [Fix P1 Music] Si Groq retourne MUSIC_PLAYLIST_CREATE avec songs=[]
+        mais la commande contient "dossier"/"ajoute"/"tous les songs",
+        on force MUSIC_PLAYLIST_ADD_FOLDER.
         """
         lower = raw.lower().strip()
+
+        # [Fix P1] Override music : ajouter dossier implicite
+        music_override = self._override_music_add_folder(lower, intent, params)
+        if music_override is not None:
+            return music_override
+
+        # [PREFERENCE_SET] Déclarations de préférence implicites :
+        # "j'ai ma musique de travail que j'aime jouer quand je code"
+        # → Groq route vers MACRO_RUN, mais c'est une déclaration → PREFERENCE_SET
+        pref_override = self._override_preference_declaration(lower, intent, params)
+        if pref_override is not None:
+            return pref_override
 
         document_override = self._override_document_with_active_context(lower, intent, params)
         if document_override is not None:
@@ -1212,6 +1251,99 @@ class Agent:
             return "FILE_OPEN", new_params
 
         return intent, params
+
+
+    @staticmethod
+    def _override_preference_declaration(lower: str, intent: str, params: dict) -> tuple[str, dict] | None:
+        """
+        [PREFERENCE_SET] Détecte les déclarations implicites de préférence.
+
+        Groq route souvent ces phrases vers MACRO_RUN ou UNKNOWN :
+          "j'ai ma musique de travail que j'aime jouer quand je code"
+          "quand je passe en mode travail j'aime jouer ma playlist"
+          "mon son de codage c'est ma playlist"
+
+        On les intercepte et on force PREFERENCE_SET.
+        """
+        # Seulement si Groq n'a pas déjà trouvé PREFERENCE_SET
+        if intent == "PREFERENCE_SET":
+            return None
+
+        # Marqueurs de déclaration de préférence
+        decl_markers = [
+            "j ai ma musique de", "j ai mon son de", "j aime souvent jouer",
+            "j aime jouer quand je", "quand je passe en mode",
+            "quand je code je joue", "quand je travaille je joue",
+            "mon son de travail", "mon son de codage", "ma musique de travail",
+            "ma musique de codage", "ma playlist de travail",
+            "je demanderais joue en mode", "joue en mode travail",
+            "joue en mode codage", "mode travail ou mode codage",
+        ]
+
+        if not any(m in lower for m in decl_markers):
+            return None
+
+        # Extraire le contexte (label)
+        label = "travail"
+        for ctx in ["codage", "code", "travail", "detente", "concentration", "sport"]:
+            if ctx in lower:
+                label = ctx
+                break
+
+        # Extraire la valeur (playlist/son)
+        value = "ma playlist"
+        for v in ["ma playlist", "cette playlist", "mon son", "ma musique"]:
+            if v in lower:
+                value = v
+                break
+
+        return "PREFERENCE_SET", {
+            "label": label,
+            "value": value,
+            "category": "music",
+        }
+
+    @staticmethod
+    def _override_music_add_folder(lower: str, intent: str, params: dict) -> tuple[str, dict] | None:
+        """
+        [Fix P1] Détecte les commandes "ajoute dossier musique à playlist"
+        mal parsées par Groq comme MUSIC_PLAYLIST_CREATE avec songs=[].
+
+        Patterns couverts :
+          "va dans le dossier Musique, ajoute tous les songs à ma playlist"
+          "ajoute ma musique à la playlist X"
+          "remplis la playlist avec mes fichiers"
+          "je t'ai dit d'ajouter ma musique à la playlist"
+        """
+        if intent != "MUSIC_PLAYLIST_CREATE":
+            return None
+
+        songs  = params.get("songs") or []
+        folder = params.get("folder") or params.get("path") or ""
+
+        # Si songs non vides ou dossier déjà fourni → pas d'override nécessaire
+        if songs or folder:
+            return None
+
+        # Détecter : mention d'un dossier/source + verbe d'ajout
+        folder_triggers = [
+            "dossier", "musique", "tous les song", "tous les fichier",
+            "toute ma", "tout mon", "tout ce qui", "les song",
+            "les fichier", "les morceaux", "les titres", "ma biblioth",
+        ]
+        add_triggers = [
+            "ajoute", "ajouter", "mets", "remplis", "remplir",
+            "va dans", "copie", "importe", "t ai dit", "j ai dit",
+        ]
+
+        has_folder = any(t in lower for t in folder_triggers)
+        has_add    = any(t in lower for t in add_triggers)
+
+        if has_folder and has_add:
+            name = params.get("name") or ""
+            return "MUSIC_PLAYLIST_ADD_FOLDER", {"name": name, "folder": ""}
+
+        return None
 
     def _override_browser_action_with_context(self, lower: str, intent: str, params: dict) -> tuple[str, dict] | None:
         if self._is_result_open_request(lower) and intent in {
@@ -1390,6 +1522,11 @@ class Agent:
         return None
 
     def _override_close_with_context(self, lower: str, intent: str, params: dict) -> tuple[str, dict] | None:
+        # [Fix] Les intents MUSIC_* ne doivent JAMAIS être écrasés par close_override.
+        # "arrete la musique" → MUSIC_STOP doit rester MUSIC_STOP, pas WINDOW_CLOSE.
+        if intent.startswith("MUSIC_") or intent.startswith("AUDIO_"):
+            return None
+
         close_prefixes = ("ferme", "fermer", "referme", "refermer", "close", "quitte", "arrete", "arrête")
         is_screen_off_false_positive = intent == "SCREEN_OFF" and any(
             k in lower for k in ["referme", "ferme", "fermer", "close", "quitte"]

@@ -2,17 +2,43 @@
   "mode travail": {
     "description": "Prépare le PC pour travailler",
     "commands": [
-      "mets le volume à 50%",
-      "ouvre Chrome"
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "params": {
+          "level": 50
+        },
+        "label": "mets le volume à 50%"
+      },
+      {
+        "intent": "APP_OPEN",
+        "params": {
+          "app_name": "chrome",
+          "args": []
+        },
+        "label": "ouvre Chrome"
+      },
+      "joue la playlist ma playlist"
     ],
     "delay_between": 1.5,
-    "builtin": true
+    "stop_on_error": false,
+    "builtin": false,
+    "created_at": 1774115574
   },
   "mode nuit": {
     "description": "Prépare le PC pour la nuit",
     "commands": [
-      "mets le volume à 0%",
-      "verrouille l'écran"
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "params": {
+          "level": 0
+        },
+        "label": "mets le volume à 0%"
+      },
+      {
+        "intent": "SYSTEM_LOCK",
+        "params": {},
+        "label": "verrouille l'écran"
+      }
     ],
     "delay_between": 1.0,
     "builtin": true
@@ -20,7 +46,13 @@
   "mode cinéma": {
     "description": "Mode lecture vidéo",
     "commands": [
-      "mets le volume à 80%"
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "params": {
+          "level": 80
+        },
+        "label": "mets le volume à 80%"
+      }
     ],
     "delay_between": 0.5,
     "builtin": true
@@ -28,9 +60,51 @@
   "démarrage": {
     "description": "Rapport de démarrage du PC",
     "commands": [
-      "montre les infos système",
-      "quelles applications sont ouvertes",
-      "infos réseau"
+      {
+        "intent": "SYSTEM_INFO",
+        "params": {},
+        "label": "montre les infos système"
+      },
+      {
+        "intent": "APP_LIST_RUNNING",
+        "params": {},
+        "label": "quelles applications sont ouvertes"
+      },
+      {
+        "intent": "NETWORK_INFO",
+        "params": {},
+        "label": "infos réseau"
+      }
+    ],
+    "delay_between": 0.5,
+    "builtin": true
+  },
+  "mode codage": {
+    "description": "Prépare le PC pour coder",
+    "commands": [
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "params": {
+          "level": 50
+        },
+        "label": "mets le volume à 50%"
+      },
+      {
+        "intent": "APP_OPEN",
+        "params": {
+          "app_name": "vscode",
+          "args": []
+        },
+        "label": "ouvre VS Code"
+      },
+      {
+        "intent": "MUSIC_PLAYLIST_PLAY",
+        "params": {
+          "name": "ma playlist"
+        },
+        "label": "joue ma playlist de codage",
+        "use_pref": "pref_music_codage"
+      }
     ],
     "delay_between": 0.5,
     "builtin": true

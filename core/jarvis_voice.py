@@ -117,6 +117,9 @@ RÈGLES ABSOLUES :
 12. CRITIQUE : utilise UNIQUEMENT les noms d'apps/fenêtres fournis dans
     le contexte. N'invente JAMAIS de noms (Telegram, Spotify, etc.)
     si ce n'est pas explicitement mentionné.
+13. MUSIQUE : Jarvis utilise VLC comme lecteur local. JAMAIS Spotify,
+    Apple Music, ou un service streaming. Ne mentionne jamais "Spotify"
+    sauf si l'utilisateur le demande explicitement.
 
 EXEMPLES PARFAITS :
 - Ouvre Chrome → "Chrome est lancé — un site à ouvrir ?"
@@ -358,6 +361,41 @@ class JarvisVoice:
                 connected = data.get("connected_ssid", "")
                 suffix    = f" (connecté : {connected})" if connected else ""
                 lines.append(f"Réseaux Wi-Fi ({len(networks)}) : {', '.join(ssids)}{suffix}")
+
+        # ── MUSIC : tout ce qui est musique → VLC, jamais Spotify ─────────
+        elif intent.startswith("MUSIC_"):
+            # Toujours préciser VLC comme lecteur — jamais Spotify/autre
+            lines.append("Lecteur : VLC Media Player (local)")
+            if intent == "MUSIC_PLAYLIST_CREATE":
+                pl_name = data.get("name") or params.get("name") or ""
+                added   = data.get("added", 0)
+                if pl_name:
+                    msg = f"Playlist créée : '{pl_name}'"
+                    if added:
+                        msg += f" ({added} chanson(s) ajoutée(s))"
+                    lines.append(msg)
+            elif intent == "MUSIC_PLAYLIST_ADD_FOLDER":
+                added  = data.get("added", 0)
+                folder = data.get("folder", "")
+                pl     = data.get("playlist") or params.get("name") or ""
+                lines.append(f"{added} chanson(s) ajoutée(s) à '{pl}' depuis '{folder}'")
+            elif intent == "MUSIC_PLAYLIST_PLAY":
+                pl    = data.get("playlist") or params.get("name") or ""
+                count = data.get("count", 0)
+                first = data.get("first", "")
+                if pl:
+                    lines.append(f"Lecture playlist '{pl}' — {count} morceau(x) via VLC")
+                    if first:
+                        lines.append(f"Premier morceau : {first}")
+            elif intent in {"MUSIC_PLAY", "MUSIC_CURRENT"}:
+                current = data.get("name") or data.get("current") or ""
+                if current:
+                    lines.append(f"Morceau en cours : {current}")
+            elif intent == "MUSIC_LIBRARY_SCAN":
+                total = data.get("total", 0)
+                new_c = data.get("new", 0)
+                lines.append(f"Bibliothèque : {total} chanson(s) indexée(s)"
+                             + (f", {new_c} nouvelle(s)" if new_c else ""))
 
         # ── Fallback générique : valeurs simples + avertissement ───────────
         else:

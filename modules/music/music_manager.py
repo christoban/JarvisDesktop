@@ -118,6 +118,7 @@ class MusicManager:
         self._lock      = threading.Lock()
         self._songs:    list[dict] = []
         self._history:  list[dict] = []
+        self._queue:    list[str] = []
         self._vlc       = VLCController()
         self._playlists = PlaylistManager()
         self._music_dirs = [Path(d) for d in (music_dirs or [])] or DEFAULT_MUSIC_DIRS
@@ -296,11 +297,11 @@ class MusicManager:
         # Cas 3 : bibliothèque vide → scan auto puis retry
         if not self._songs:
             logger.info("Bibliothèque vide — scan automatique...")
-            scan = self.scan_library()
-            if self._songs:
-                results = self.search_song(query)
-                if results:
-                    return self._play_path(results[0]["path"], results[0])
+            self.scan_library()
+        if self._songs and not (Path(query).is_absolute() and Path(query).exists()):
+            results = self.search_song(query)
+            if results:
+                return self._play_path(results[0]["path"], results[0])
 
         # Cas 4 : recherche directe dans le dossier musique
         for base_dir in self._music_dirs:
@@ -350,19 +351,44 @@ class MusicManager:
         )
 
     def play_playlist(self, playlist_name: str) -> dict:
-        """Joue une playlist par nom."""
+        """
+        Joue une playlist par nom via VLC.
+        Si la playlist est vide, tente un scan auto du dossier Musique
+        et propose de l'alimenter.
+        """
+        pl = self._playlists.get_playlist(playlist_name)
+        if pl is None:
+            return self._err(
+                f"Playlist '{playlist_name}' introuvable. "
+                f"Dis 'crée une playlist {playlist_name}' pour la créer.",
+                {"playlist": playlist_name, "not_found": True}
+            )
+
         paths = self._playlists.get_songs(playlist_name)
+
         if not paths:
-            pl = self._playlists.get_playlist(playlist_name)
-            if pl is None:
-                return self._err(f"Playlist '{playlist_name}' introuvable.")
-            return self._err(f"La playlist '{playlist_name}' est vide.")
+            # Playlist vide → scan auto si bibliothèque aussi vide
+            if not self._songs:
+                logger.info("Bibliothèque et playlist vides — scan auto...")
+                self.scan_library()
+
+            # Proposer d'ajouter le dossier Musique
+            music_dir = next((str(d) for d in self._music_dirs if d.exists()), "")
+            msg = f"La playlist '{playlist_name}' est vide."
+            if music_dir:
+                msg += f" Dis 'ajoute le dossier Musique à la playlist {playlist_name}' pour la remplir."
+            return self._err(msg, {
+                "playlist": playlist_name,
+                "empty": True,
+                "suggested_action": f"MUSIC_PLAYLIST_ADD_FOLDER",
+                "music_dir": music_dir,
+            })
 
         result = self._vlc.play_playlist(paths)
         if result["success"]:
             self._playlists.increment_play_count(playlist_name)
         return self._ok(
-            f"Playlist '{playlist_name}' — {len(paths)} morceau(x).",
+            f"Lecture de '{playlist_name}' — {len(paths)} morceau(x) via VLC.",
             {"playlist": playlist_name, "count": len(paths), **result.get("data", {})}
         )
 
@@ -409,6 +435,109 @@ class MusicManager:
         return self._vlc.get_status()
 
     # ══════════════════════════════════════════════════════════════════════════
+    #  FILE D'ATTENTE (QUEUE)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def queue_add(self, query: str) -> dict:
+        """Ajoute une chanson à la file d'attente par requête (titre/chemin)."""
+        if not query:
+            return self._err("Précise une chanson à ajouter à la file d'attente.")
+
+        # Chemin direct
+        p = Path(query)
+        if p.exists() and p.is_file() and p.suffix.lower() in MUSIC_EXTENSIONS:
+            self._queue.append(str(p))
+            return self._ok(
+                f"'{p.name}' ajouté à la file d'attente.",
+                {"added": p.name, "path": str(p), "queue_count": len(self._queue)}
+            )
+
+        # Recherche dans l'index
+        results = self.search_song(query)
+        if not results and not self._songs:
+            self.scan_library()
+            results = self.search_song(query)
+
+        if not results:
+            return self._err(f"Aucune chanson trouvée pour '{query}'.")
+
+        song = results[0]
+        self._queue.append(song["path"])
+        return self._ok(
+            f"'{song['title']}' ajouté à la file d'attente.",
+            {
+                "added": song["title"],
+                "path": song["path"],
+                "queue_count": len(self._queue),
+            }
+        )
+
+    def queue_add_playlist(self, playlist_name: str) -> dict:
+        """Ajoute toutes les chansons d'une playlist dans la file d'attente."""
+        pl = self._playlists.get_playlist(playlist_name)
+        if pl is None:
+            return self._err(f"Playlist '{playlist_name}' introuvable.")
+        paths = self._playlists.get_songs(playlist_name)
+        if not paths:
+            return self._err(f"Playlist '{playlist_name}' vide.")
+
+        existing = set(self._queue)
+        added = 0
+        for p in paths:
+            if p not in existing:
+                self._queue.append(p)
+                existing.add(p)
+                added += 1
+
+        return self._ok(
+            f"{added} chanson(s) de '{playlist_name}' ajoutée(s) à la file d'attente.",
+            {"playlist": playlist_name, "added": added, "queue_count": len(self._queue)}
+        )
+
+    def queue_list(self) -> dict:
+        """Liste la file d'attente."""
+        items = []
+        for i, p in enumerate(self._queue, 1):
+            pp = Path(p)
+            items.append({"index": i, "title": pp.stem, "path": p})
+
+        lines = [f"FILE D'ATTENTE ({len(items)})"]
+        lines.append("-" * 40)
+        for it in items[:30]:
+            lines.append(f"{it['index']:>2}. {it['title']}")
+
+        return self._ok(
+            f"{len(items)} titre(s) dans la file d'attente.",
+            {"queue": items, "count": len(items), "display": "\n".join(lines)}
+        )
+
+    def queue_clear(self) -> dict:
+        """Vide la file d'attente."""
+        count = len(self._queue)
+        self._queue = []
+        return self._ok("File d'attente vidée.", {"cleared": True, "count_removed": count})
+
+    def queue_play(self, keep_queue: bool = False) -> dict:
+        """Lance la file d'attente via VLC."""
+        valid = [p for p in self._queue if Path(p).exists()]
+        if not valid:
+            return self._err("La file d'attente est vide.")
+
+        result = self._vlc.play_playlist(valid)
+        if result.get("success") and not keep_queue:
+            self._queue = []
+
+        return self._ok(
+            f"Lecture de la file d'attente ({len(valid)} titre(s)).",
+            {
+                "count": len(valid),
+                "played": bool(result.get("success")),
+                "queue_cleared": (not keep_queue and bool(result.get("success"))),
+                **(result.get("data") or {}),
+            }
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
     #  PLAYLISTS — délégation à PlaylistManager
     # ══════════════════════════════════════════════════════════════════════════
 
@@ -422,15 +551,175 @@ class MusicManager:
         return self._playlists.list_playlists()
 
     def add_song_to_playlist(self, song_query: str, playlist_name: str) -> dict:
-        """Cherche une chanson et l'ajoute à une playlist."""
+        """Cherche une chanson et l'ajoute à une playlist (index uniquement)."""
         results = self.search_song(song_query)
         if not results:
             return self._err(f"Chanson '{song_query}' non trouvée dans la bibliothèque.")
         song = results[0]
         return self._playlists.add_song(playlist_name, song)
 
+    def add_song_to_playlist_with_search(
+        self, song_query: str, playlist_name: str, search_dirs: list = None
+    ) -> dict:
+        """
+        [Correction racine — Couche 2]
+        Cherche une chanson et l'ajoute à une playlist.
+
+        Stratégie en 3 temps :
+          1. Index interne (self._songs) → rapide
+          2. Scan disque ciblé dans search_dirs → trouve les fichiers non indexés
+          3. Si trouvé sur disque → indexe le fichier + ajoute à la playlist
+
+        Permet de résoudre "Boku mixed sur le bureau" même si la bibliothèque
+        ne contient qu'une chanson indexée (ou aucune).
+        """
+        from pathlib import Path as _Path
+
+        # ── Étape 1 : chercher dans l'index existant ─────────────────────────
+        results = self.search_song(song_query)
+        if results:
+            song = results[0]
+            self._playlists.create_playlist(playlist_name)
+            result = self._playlists.add_song(playlist_name, song)
+            if result.get("success"):
+                return self._ok(
+                    f"'{song['title']}' ajouté à '{playlist_name}'.",
+                    {"playlist": playlist_name, "song": song["title"],
+                     "source": "index", "path": song["path"]}
+                )
+
+        # ── Étape 2 : scan disque ciblé ──────────────────────────────────────
+        dirs_to_scan = search_dirs or self._music_dirs
+        query_clean  = song_query.strip().lower()
+        # Retirer l'extension si présente dans la requête
+        query_stem   = query_clean
+        for ext in MUSIC_EXTENSIONS:
+            query_stem = query_stem.replace(ext, "")
+        query_stem = query_stem.strip()
+
+        found_path = None
+        for d in dirs_to_scan:
+            d_path = _Path(d)
+            if not d_path.exists():
+                continue
+            try:
+                for f in d_path.rglob("*"):
+                    if f.suffix.lower() not in MUSIC_EXTENSIONS:
+                        continue
+                    fname_lower = f.stem.lower()
+                    # Correspondance exacte d'abord
+                    if fname_lower == query_stem or f.name.lower() == query_clean:
+                        found_path = f
+                        break
+                    # Correspondance partielle : tous les mots de la requête présents
+                    query_words = [w for w in query_stem.split() if len(w) > 2]
+                    if query_words and all(w in fname_lower for w in query_words):
+                        found_path = f
+                        break
+                if found_path:
+                    break
+            except PermissionError:
+                continue
+
+        if not found_path:
+            scanned = [str(d) for d in dirs_to_scan if _Path(d).exists()]
+            return self._err(
+                f"'{song_query}' introuvable dans la bibliothèque ni sur le disque.",
+                {"query": song_query,
+                 "searched_dirs": scanned[:5],
+                 "tip": "Précise le nom exact du fichier ou son dossier."}
+            )
+
+        # ── Étape 3 : indexer le fichier trouvé + ajouter à la playlist ──────
+        meta = _extract_metadata(found_path)
+        song = {
+            "id":         _song_id(str(found_path)),
+            "title":      meta["title"],
+            "artist":     meta["artist"],
+            "album":      meta["album"],
+            "genre":      meta["genre"],
+            "duration":   meta["duration"],
+            "path":       str(found_path),
+            "play_count": 0,
+            "last_played": 0,
+            "added_at":   int(__import__("time").time()),
+        }
+
+        # Ajouter à l'index si pas déjà présent
+        with self._lock:
+            existing_paths = {s["path"] for s in self._songs}
+            if str(found_path) not in existing_paths:
+                self._songs.append(song)
+                self._save()
+
+        # Créer la playlist si besoin et ajouter
+        self._playlists.create_playlist(playlist_name)
+        result = self._playlists.add_song(playlist_name, song)
+        if result.get("success"):
+            return self._ok(
+                f"'{found_path.name}' trouvé sur le disque et ajouté à '{playlist_name}'.",
+                {"playlist": playlist_name, "song": found_path.name,
+                 "source": "disk_scan", "path": str(found_path),
+                 "indexed": True}
+            )
+        return result
+
     def add_folder_to_playlist(self, folder_path: str, playlist_name: str) -> dict:
-        return self._playlists.add_folder_to_playlist(playlist_name, folder_path)
+        """
+        Ajoute tous les fichiers audio d'un dossier à une playlist.
+        Si folder_path vide ou introuvable → utilise le dossier Musique par défaut.
+        Crée la playlist si elle n'existe pas.
+        """
+        # Résoudre le dossier
+        if not folder_path:
+            resolved = next((d for d in self._music_dirs if d.exists()), None)
+        else:
+            resolved = Path(folder_path)
+            if not resolved.exists():
+                # Essayer les sous-dossiers connus
+                for base in self._music_dirs:
+                    candidate = base / folder_path
+                    if candidate.exists():
+                        resolved = candidate
+                        break
+                else:
+                    resolved = next((d for d in self._music_dirs if d.exists()), None)
+
+        if resolved is None or not resolved.exists():
+            return self._err(
+                f"Dossier introuvable : '{folder_path or 'dossier Musique par défaut'}'. "
+                f"Vérifie que le dossier Musique existe dans ton profil utilisateur.",
+                {"folder": str(resolved) if resolved else folder_path}
+            )
+
+        # Créer la playlist si elle n'existe pas
+        self._playlists.create_playlist(playlist_name)
+
+        # Scan du dossier si bibliothèque vide
+        if not self._songs:
+            logger.info(f"Bibliothèque vide — scan auto de {resolved}...")
+            self.scan_library(str(resolved))
+
+        result = self._playlists.add_folder_to_playlist(playlist_name, str(resolved))
+        added = (result.get("data") or {}).get("added", 0)
+
+        # Si aucun fichier ajouté via playlist_manager, tenter via scan
+        if added == 0 and self._songs:
+            # Ajouter les chansons de la bibliothèque qui sont dans ce dossier
+            folder_str = str(resolved).lower()
+            matching = [s for s in self._songs if str(s.get("path","")).lower().startswith(folder_str)]
+            added_from_lib = 0
+            for song in matching:
+                r = self._playlists.add_song(playlist_name, song)
+                if r.get("success") and not (r.get("data") or {}).get("duplicate"):
+                    added_from_lib += 1
+            if added_from_lib:
+                return self._ok(
+                    f"{added_from_lib} chanson(s) ajoutée(s) à '{playlist_name}' depuis la bibliothèque.",
+                    {"playlist": playlist_name, "added": added_from_lib, "folder": str(resolved)}
+                )
+
+        return result
 
     def auto_create_playlists_by_genre(self) -> dict:
         """Crée automatiquement des playlists par genre."""

@@ -162,7 +162,31 @@ INTENTS = {
     "MUSIC_PLAYLIST_CREATE": {"desc": "Créer une playlist",                   "params": {"name": "str"}},
     "MUSIC_PLAYLIST_PLAY":   {"desc": "Jouer une playlist",                   "params": {"name": "str"}},
     "MUSIC_PLAYLIST_LIST":   {"desc": "Lister les playlists disponibles",     "params": {}},
-    "MUSIC_LIBRARY_SCAN":    {"desc": "Scanner la bibliothèque musicale",     "params": {"path": "str optionnel"}},
+    "MUSIC_PLAYLIST_DELETE": {"desc": "Supprimer une playlist",               "params": {"name": "str"}},
+    "MUSIC_PLAYLIST_CLEAR":  {"desc": "Vider une playlist (garder la playlist, enlever les chansons)", "params": {"name": "str"}},
+    "MUSIC_PLAYLIST_REMOVE_SONG": {"desc": "Enlever une chanson d'une playlist", "params": {"name": "str", "query": "str"}},
+    "MUSIC_PLAYLIST_RENAME": {"desc": "Renommer une playlist",                "params": {"old_name": "str", "new_name": "str"}},
+    "MUSIC_PLAYLIST_DUPLICATE": {"desc": "Dupliquer une playlist",            "params": {"source": "str", "target": "str"}},
+    "MUSIC_PLAYLIST_EXPORT": {"desc": "Exporter une playlist (m3u/json)",     "params": {"name": "str", "format": "str optionnel", "path": "str optionnel"}},
+    "MUSIC_PLAYLIST_IMPORT": {"desc": "Importer une playlist depuis fichier", "params": {"name": "str optionnel", "path": "str", "mode": "replace|append optionnel"}},
+    "MUSIC_PLAYLIST_MERGE": {"desc": "Fusionner deux playlists",               "params": {"source": "str", "target": "str", "output": "str optionnel"}},
+    "MUSIC_PLAYLIST_MOVE_SONG": {"desc": "Déplacer une chanson dans une playlist", "params": {"name": "str", "query": "str optionnel", "from_index": "int optionnel", "to_index": "int"}},
+    "MUSIC_QUEUE_ADD": {"desc": "Ajouter une chanson à la file d'attente",     "params": {"query": "str"}},
+    "MUSIC_QUEUE_ADD_PLAYLIST": {"desc": "Ajouter une playlist à la file d'attente", "params": {"name": "str"}},
+    "MUSIC_QUEUE_LIST": {"desc": "Lister la file d'attente",                    "params": {}},
+    "MUSIC_QUEUE_CLEAR": {"desc": "Vider la file d'attente",                    "params": {}},
+    "MUSIC_QUEUE_PLAY": {"desc": "Lire la file d'attente",                       "params": {}},
+    "MUSIC_LIBRARY_SCAN":         {"desc": "Scanner la bibliothèque musicale",              "params": {"path": "str optionnel"}},
+    "MUSIC_PLAYLIST_ADD_FOLDER":  {"desc": "Ajouter un dossier entier à une playlist",        "params": {"name": "str", "folder": "str optionnel"}},
+    "MUSIC_PLAYLIST_ADD_SONG":    {
+        "desc": "Ajouter un fichier audio spécifique à une playlist",
+        "params": {
+            "name":   "str (nom de la playlist)",
+            "query":  "str (nom du fichier ou de la chanson)",
+            "song":   "str (nom du fichier, identique à query)",
+            "folder": "str optionnel (localisation : bureau, téléchargements, documents...)",
+        },
+    },
 
     # ── Documents ─────────────────────────────────────────────────────────────
     "DOC_READ":        {"desc": "Lire un document Word ou PDF",              "params": {"path": "str"}},
@@ -188,6 +212,10 @@ INTENTS = {
 
     "GREETING":     {"desc": "Salutation ou message d'accueil",              "params": {}},
     "MEMORY_SHOW":  {"desc": "Afficher ce dont Jarvis se souvient",          "params": {}},
+    "PREFERENCE_SET": {
+        "desc": "Mémoriser une préférence utilisateur (playlist de travail, app favorite, volume préféré, etc.)",
+        "params": {"label": "str (ex: travail, codage, détente)", "value": "str (valeur associée)", "category": "str optionnel (music, app, volume...)"},
+    },
     "KNOWLEDGE_QA": {"desc": "Question de connaissance générale, réponse directe sans action système", "params": {}},
     "INCOMPLETE":   {"desc": "Commande incomplète — paramètre manquant",     "params": {"missing": "str", "suggested_intent": "str"}},
 
@@ -219,6 +247,55 @@ FEW_SHOT_EXAMPLES = [
     ("liste les réseaux wifi",            '{"intent":"WIFI_LIST","params":{},"confidence":0.99,"response_message":"Je cherche les réseaux Wi-Fi disponibles."}'),
     ("donne moi les infos sur mon système", '{"intent":"SYSTEM_INFO","params":{},"confidence":0.99,"response_message":"Je récupère les informations système."}'),
     ("il me reste combien d'espace disque", '{"intent":"SYSTEM_DISK","params":{},"confidence":0.99,"response_message":"Je vérifie l\'espace disque disponible."}'),
+    # Few-shots musique complexes — ajouter dossier à playlist
+    ("ajoute le dossier Musique a ma playlist chill",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"chill","folder":""},"confidence":0.99,"response_message":"Ajout du dossier Musique a la playlist chill."}'),
+    ("ajoute tous les songs du dossier Musique a ma playlist",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"Ajout de tous les fichiers musicaux a la playlist."}'),
+    ("mets toute ma musique dans la playlist favoris",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"favoris","folder":""},"confidence":0.98,"response_message":"Ajout de toute la bibliotheque a la playlist favoris."}'),
+    ("ajoute la chanson shape of you a ma playlist chill",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"chill","query":"shape of you"},"confidence":0.99,"response_message":"Ajout de shape of you a la playlist chill."}'),
+    # [Fix A] Distinguer fichier spécifique vs dossier entier
+    ("ajoute le fichier Boku mixed.mp3 du bureau a la playlist de travail",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"playlist de travail","query":"Boku mixed.mp3","song":"Boku mixed.mp3","folder":"bureau"},"confidence":0.99,"response_message":"Ajout du fichier Boku mixed.mp3 a la playlist de travail."}'),
+    ("ajoute le fichier Boku mixed qui est sur le bureau a la playlist coding hit",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"coding hit","query":"Boku mixed","song":"Boku mixed","folder":"bureau"},"confidence":0.99,"response_message":"Ajout de Boku mixed a la playlist coding hit."}'),
+    ("ajoute moi le fichier son lofi qui est dans les telechargements a ma playlist",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"ma playlist","query":"son lofi","song":"son lofi","folder":"téléchargements"},"confidence":0.98,"response_message":"Ajout du fichier son lofi a la playlist."}'),
+    ("ajoute le titre relaxing beats de mes documents a la playlist detente",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"detente","query":"relaxing beats","song":"relaxing beats","folder":"documents"},"confidence":0.98,"response_message":"Ajout de relaxing beats a la playlist detente."}'),
+    ("cree une playlist travail et ajoute s y le fichier son.mp3 sur le bureau",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"travail","query":"son.mp3","song":"son.mp3","folder":"bureau"},"confidence":0.99,"response_message":"Playlist creee et fichier ajoute."}'),
+    ("ajoute ce fichier mp3 a ma playlist",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"ma playlist","query":"","song":""},"confidence":0.92,"response_message":"Ajout du fichier a la playlist."}'),
+    ("ajoute le morceau lofi.flac de mes telechargements a la playlist detente",
+     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"detente","query":"lofi.flac","song":"lofi.flac","folder":"téléchargements"},"confidence":0.99,"response_message":"Ajout de lofi.flac a la playlist detente."}'),
+    # [Fix P1] Patterns avec structure différente que Groq rate
+    ("va dans le dossier Musique tu ajoutes a ma playlist tous les songs qui s y trouve",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"J ajoute tous les fichiers du dossier Musique a la playlist."}'),
+    ("remplis ma playlist avec tous les morceaux du dossier Musique",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"Remplissage de la playlist avec tous les morceaux."}'),
+    ("importe les musiques du dossier Musique dans ma playlist",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"Import de tous les fichiers musicaux dans la playlist."}'),
+    ("je t ai dit d ajouter a cette playlist ma liste de musique dans le dossier Musique",
+     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"J ajoute tous les fichiers du dossier Musique a la playlist."}'),
+    # [Fix] play_playlist existante sans préciser le nom
+    ("joue la",
+     '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"},"confidence":0.90,"response_message":"Je lance la playlist."}'),
+    ("joue alors cette playlist maintenant",
+     '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"},"confidence":0.95,"response_message":"Je lance la playlist maintenant."}'),
+    # PREFERENCE_SET — mémorisation préférences utilisateur
+    ("j aime jouer ma playlist quand je code",
+     '{"intent":"PREFERENCE_SET","params":{"label":"codage","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Je retiens que ta playlist de codage est ma playlist."}'),
+    ("mon son de travail c est ma playlist",
+     '{"intent":"PREFERENCE_SET","params":{"label":"travail","value":"ma playlist","category":"music"},"confidence":0.98,"response_message":"Je note que ta musique de travail est ma playlist."}'),
+    ("quand je passe en mode travail je joue ma playlist",
+     '{"intent":"PREFERENCE_SET","params":{"label":"travail","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Je mémorise ca comme ta playlist de travail."}'),
+    ("retiens que mon volume de travail c est 60 pourcent",
+     '{"intent":"PREFERENCE_SET","params":{"label":"travail","value":"60","category":"volume"},"confidence":0.98,"response_message":"Volume de travail enregistre a 60 pourcent."}'),
+    ("associe cette playlist au mode detente",
+     '{"intent":"PREFERENCE_SET","params":{"label":"detente","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Playlist associee au mode detente."}'),
     # [Bug6] Few-shots explicites pour REPEAT_LAST — évite la confusion avec MEMORY_SHOW
     ("répète la dernière commande", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
     ("rejoue la commande précédente", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je relance la commande précédente."}'),
@@ -464,19 +541,46 @@ RÈGLES :
 4. "mode nuit/travail/cinéma" → MACRO_RUN avec le nom de la macro.
 5. "répète/rejoue" → REPEAT_LAST.
 6. "joue musique X" / "lecture X" → MUSIC_PLAY, pas AUDIO_PLAY.
+5b. Déclarations de préférence ("j'aime X quand je Y", "mon son de X c'est Y",
+    "quand je code je joue X", "retiens que mon X c'est Y", "associe X à Y",
+    "j'ai une musique de X que j'aime") → PREFERENCE_SET avec label=contexte, value=ressource.
 7. "joue playlist X" → MUSIC_PLAYLIST_PLAY.
-8. Salutations → GREETING. Questions capacités → HELP.
-9. Phrases multi-actions → retenir l'ACTION FINALE.
-10. Si vraiment incompréhensible → UNKNOWN.
-11. Si la requête est une question de connaissance générale (définition, explication, comparaison,
+8. "ajoute le dossier/tous les songs/toute ma musique/tous les fichiers/mets ma musique dans... à la playlist X" → MUSIC_PLAYLIST_ADD_FOLDER (name=playlist, folder="").
+   "va dans le dossier Musique tu ajoutes à ma playlist" → aussi MUSIC_PLAYLIST_ADD_FOLDER.
+   "je t'ai dit d'ajouter ma musique à la playlist" → aussi MUSIC_PLAYLIST_ADD_FOLDER.
+   JAMAIS MUSIC_PLAYLIST_CREATE quand l'intention est d'ajouter des fichiers existants.
+9. "ajoute la chanson X à la playlist Y" → MUSIC_PLAYLIST_ADD_SONG (query=X).
+   "ajoute le fichier X.mp3 [du bureau/des téléchargements] à la playlist Y"
+   → MUSIC_PLAYLIST_ADD_SONG avec query=X, song=X, folder=lieu.
+   RÈGLE CRITIQUE : si la commande mentionne UN SEUL fichier (avec ou sans extension)
+   ou "le fichier", "ce fichier", "ce morceau", "cette chanson", "qui est sur le bureau",
+   "dans les téléchargements", "dans mes documents" → TOUJOURS MUSIC_PLAYLIST_ADD_SONG.
+   TOUJOURS inclure folder dans params si un lieu est mentionné
+   (bureau→"bureau", téléchargements→"téléchargements", documents→"documents", etc.).
+   TOUJOURS inclure song=query (copie du champ query).
+   Si elle mentionne "le dossier entier", "tous les fichiers", "tous mes songs" → MUSIC_PLAYLIST_ADD_FOLDER.
+10. "joue la" après avoir parlé d'une playlist → MUSIC_PLAYLIST_PLAY avec le nom du contexte.
+11. "renomme la playlist X en Y" → MUSIC_PLAYLIST_RENAME (old_name=X, new_name=Y).
+12. "duplique la playlist X en Y" → MUSIC_PLAYLIST_DUPLICATE (source=X, target=Y).
+13. "exporte la playlist X" → MUSIC_PLAYLIST_EXPORT (name=X, format=m3u par défaut).
+14. "importe la playlist depuis <fichier>" → MUSIC_PLAYLIST_IMPORT (path=<fichier>, name optionnel).
+15. "fusionne la playlist X avec Y [dans Z]" → MUSIC_PLAYLIST_MERGE (source=X, target=Y, output=Z optionnel).
+16. "déplace la chanson X dans la playlist Y en position N" → MUSIC_PLAYLIST_MOVE_SONG (name=Y, query=X, to_index=N).
+17. "ajoute X à la file d'attente" → MUSIC_QUEUE_ADD (query=X).
+18. "ajoute la playlist X à la file d'attente" → MUSIC_QUEUE_ADD_PLAYLIST (name=X).
+19. "liste/vide/lance la file d'attente" → MUSIC_QUEUE_LIST / MUSIC_QUEUE_CLEAR / MUSIC_QUEUE_PLAY.
+20. Salutations → GREETING. Questions capacités → HELP.
+21. Phrases multi-actions → retenir l'ACTION FINALE.
+22. Si vraiment incompréhensible → UNKNOWN.
+23. Si la requête est une question de connaissance générale (définition, explication, comparaison,
     culture générale, raisonnement) et ne demande pas d'action sur le PC → KNOWLEDGE_QA.
-12. Pour KNOWLEDGE_QA, donne la réponse directement dans `response_message`.
-13. SORTIE STRICTE : retourne UNIQUEMENT un objet JSON avec EXACTEMENT ces clés
+24. Pour KNOWLEDGE_QA, donne la réponse directement dans `response_message`.
+25. SORTIE STRICTE : retourne UNIQUEMENT un objet JSON avec EXACTEMENT ces clés
     `intent`, `params`, `confidence`, `response_message`.
-14. INTERDIT de retourner des objets métier (`cpu`, `ram`, `disk`, `system_info`, etc.).
-15. `params` doit être un objet JSON ({{}} si vide), jamais du texte.
-16. `confidence` doit être un nombre entre 0 et 1.
-17. Si la demande concerne l'état/infos du système PC → `intent` = `SYSTEM_INFO`.
+26. INTERDIT de retourner des objets métier (`cpu`, `ram`, `disk`, `system_info`, etc.).
+27. `params` doit être un objet JSON ({{}} si vide), jamais du texte.
+28. `confidence` doit être un nombre entre 0 et 1.
+29. Si la demande concerne l'état/infos du système PC → `intent` = `SYSTEM_INFO`.
 
 FORMAT (JSON uniquement) :
 {{"intent": "NOM", "params": {{}}, "confidence": 0.95, "response_message": "Réponse naturelle."}}
@@ -601,12 +705,196 @@ FORMAT (JSON uniquement) :
             return {"intent": "MUSIC_PLAYLIST_PLAY", "params": {"name": name or ""}, "confidence": 0.85}
         if any(k in lower for k in ["liste mes playlists", "mes playlists", "affiche playlists", "list playlists"]):
             return {"intent": "MUSIC_PLAYLIST_LIST", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["supprime la playlist", "supprime une playlist", "delete playlist", "efface la playlist"]):
+            name = self._extract_after(lower, ["supprime la playlist ", "supprime la  playlist ", "delete playlist ", "efface la playlist "])
+            return {"intent": "MUSIC_PLAYLIST_DELETE", "params": {"name": name or ""}, "confidence": 0.85}
+
+        # Renommer playlist: "renomme la playlist X en Y"
+        m_rename = re.search(r"(?:renomme|renommer|rename|change le nom de)\s+(?:la|ma)?\s*playlist\s+(.+?)\s+(?:en|to|comme)\s+(.+)$", lower)
+        if m_rename:
+            old_name = m_rename.group(1).strip()
+            new_name = m_rename.group(2).strip()
+            return {
+                "intent": "MUSIC_PLAYLIST_RENAME",
+                "params": {"old_name": old_name, "new_name": new_name},
+                "confidence": 0.88,
+            }
+
+        # Dupliquer playlist: "duplique la playlist X en Y"
+        m_dup = re.search(r"(?:duplique|dupliquer|copie|duplicate)\s+(?:la|ma)?\s*playlist\s+(.+?)\s+(?:en|vers|to)\s+(.+)$", lower)
+        if m_dup:
+            source = m_dup.group(1).strip()
+            target = m_dup.group(2).strip()
+            return {
+                "intent": "MUSIC_PLAYLIST_DUPLICATE",
+                "params": {"source": source, "target": target},
+                "confidence": 0.86,
+            }
+
+        # Export playlist: "exporte la playlist X [en json] [vers path]"
+        m_export = re.search(r"(?:exporte|exporter|export)\s+(?:la|ma)?\s*playlist\s+(.+?)(?:\s+vers\s+(.+))?$", lower)
+        if m_export and "import" not in lower:
+            chunk = m_export.group(1).strip()
+            out_path = (m_export.group(2) or "").strip()
+            fmt = "json" if " json" in f" {chunk} " or "json" in out_path else "m3u"
+            name = chunk.replace(" en json", "").replace(" en m3u", "").strip()
+            return {
+                "intent": "MUSIC_PLAYLIST_EXPORT",
+                "params": {"name": name, "format": fmt, "path": out_path},
+                "confidence": 0.84,
+            }
+
+        # Import playlist: "importe playlist X depuis C:/..." ou "importe playlist depuis C:/..."
+        m_import = re.search(r"(?:importe|importer|import)\s+(?:la|ma)?\s*playlist(?:\s+(.+?))?\s+(?:depuis|from)\s+(.+)$", lower)
+        if m_import:
+            name = (m_import.group(1) or "").strip()
+            in_path = m_import.group(2).strip()
+            mode = "append" if "ajoute" in lower or "append" in lower else "replace"
+            return {
+                "intent": "MUSIC_PLAYLIST_IMPORT",
+                "params": {"name": name, "path": in_path, "mode": mode},
+                "confidence": 0.84,
+            }
+
+        # Fusion playlist: "fusionne la playlist A avec B [dans C]"
+        m_merge = re.search(r"(?:fusionne|fusionner|merge)\s+(?:la|ma)?\s*playlist\s+(.+?)\s+(?:avec|and)\s+(.+?)(?:\s+(?:dans|en|to)\s+(.+))?$", lower)
+        if m_merge:
+            source = m_merge.group(1).strip()
+            target = m_merge.group(2).strip()
+            output = (m_merge.group(3) or "").strip()
+            return {
+                "intent": "MUSIC_PLAYLIST_MERGE",
+                "params": {"source": source, "target": target, "output": output},
+                "confidence": 0.84,
+            }
+
+        # Déplacer chanson dans playlist
+        m_move = re.search(r"(?:deplace|déplace|move)\s+(.+?)\s+(?:dans|de la playlist|de ma playlist)\s+(.+?)\s+(?:a la position|en position|position)\s+(\d+)$", lower)
+        if m_move:
+            query = m_move.group(1).strip()
+            name = m_move.group(2).strip()
+            to_index = int(m_move.group(3))
+            return {
+                "intent": "MUSIC_PLAYLIST_MOVE_SONG",
+                "params": {"name": name, "query": query, "to_index": to_index},
+                "confidence": 0.84,
+            }
+
+        queue_tokens = ["file d attente", "file d'attente", "queue"]
+
+        # Queue: add playlist
+        if any(k in lower for k in ["ajoute la playlist", "ajoute ma playlist"]) and any(k in lower for k in queue_tokens):
+            m_qpl = re.search(r"ajoute\s+(?:la|ma)?\s*playlist\s+(.+?)\s+(?:a|dans)\s+(?:la\s+)?(?:file d attente|file d'attente|queue)", lower)
+            if m_qpl:
+                return {
+                    "intent": "MUSIC_QUEUE_ADD_PLAYLIST",
+                    "params": {"name": m_qpl.group(1).strip()},
+                    "confidence": 0.84,
+                }
+
+        # Queue: add song
+        if any(k in lower for k in queue_tokens) and any(k in lower for k in ["ajoute", "mets"]):
+            m_q = re.search(r"(?:ajoute|mets)\s+(.+?)\s+(?:a|dans)\s+(?:la\s+)?(?:file d attente|file d'attente|queue)", lower)
+            if m_q:
+                return {
+                    "intent": "MUSIC_QUEUE_ADD",
+                    "params": {"query": m_q.group(1).strip()},
+                    "confidence": 0.84,
+                }
+
+        # Queue: list / clear / play
+        if any(k in lower for k in ["liste la file d attente", "liste la file d'attente", "affiche la file d attente", "affiche la file d'attente", "queue list", "montre la queue"]):
+            return {"intent": "MUSIC_QUEUE_LIST", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["vide la file d attente", "vide la file d'attente", "efface la file d attente", "efface la file d'attente", "clear queue"]):
+            return {"intent": "MUSIC_QUEUE_CLEAR", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["lance la file d attente", "lance la file d'attente", "joue la file d attente", "joue la file d'attente", "play queue"]):
+            return {"intent": "MUSIC_QUEUE_PLAY", "params": {}, "confidence": 0.9}
+
+        if any(k in lower for k in ["vide la playlist", "vide ma playlist", "vide une playlist", "clear playlist", "vide le contenu", "efface tout de la playlist"]):
+            name = self._extract_after(lower, [
+                "vide la playlist ",
+                "vide ma playlist ",
+                "vide une playlist ",
+                "clear playlist ",
+                "vide le contenu de la playlist ",
+            ])
+            return {"intent": "MUSIC_PLAYLIST_CLEAR", "params": {"name": name or ""}, "confidence": 0.85}
+        if any(k in lower for k in ["enleve", "enlève", "retire", "supprime la chanson", "remove song", "efface la musique"]):
+            # Extraire le nom de la playlist
+            pl_name = ""
+            for prefix in [
+                "de la playlist ",
+                "de ma playlist ",
+                "dans la playlist ",
+                "dans ma playlist ",
+                "de la  playlist ",
+                "de la playlist",
+                "from playlist ",
+            ]:
+                if prefix in lower:
+                    pl_name = lower.split(prefix)[-1].strip()
+                    break
+            # Extraire le titre de la chanson (entre "enleve" et "de la playlist")
+            song_query = ""
+            for trigger in ["enleve ", "enlève ", "retire ", "supprime la chanson ", "remove "]:
+                if trigger in lower:
+                    before = lower.split(trigger)[-1]
+                    if "de la playlist" in before:
+                        song_query = before.split("de la playlist")[0].strip()
+                    elif "de ma playlist" in before:
+                        song_query = before.split("de ma playlist")[0].strip()
+                    elif "dans la playlist" in before:
+                        song_query = before.split("dans la playlist")[0].strip()
+                    elif "dans ma playlist" in before:
+                        song_query = before.split("dans ma playlist")[0].strip()
+                    else:
+                        song_query = before.strip()
+                    break
+            if pl_name and song_query:
+                return {"intent": "MUSIC_PLAYLIST_REMOVE_SONG", 
+                        "params": {"name": pl_name, "query": song_query}, 
+                        "confidence": 0.85}
         if any(k in lower for k in ["lecture aleatoire", "shuffle", "mode aleatoire"]):
             return {"intent": "MUSIC_SHUFFLE", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["repete cette musique", "repete la musique", "repeat"]):
             return {"intent": "MUSIC_REPEAT", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["scanne la musique", "analyse musique", "scan musique", "bibliotheque musicale"]):
             return {"intent": "MUSIC_LIBRARY_SCAN", "params": {}, "confidence": 0.85}
+
+        # Ajout dossier/fichiers à une playlist
+        if any(k in lower for k in ["ajoute le dossier", "ajoute tous les", "ajoute toute ma musique",
+                                     "met le dossier", "mets le dossier", "remplis la playlist",
+                                     "remplie la playlist", "tous les songs", "tous les fichiers musique"]):
+            # Extraire le nom de playlist
+            pl_name = ""
+            for prefix in ["a la playlist ", "à la playlist ", "dans la playlist ", "dans ma playlist "]:
+                if prefix in lower:
+                    pl_name = lower.split(prefix, 1)[-1].strip()
+                    break
+            # Extraire le dossier
+            folder = ""
+            if "musique" in lower:
+                folder = ""  # dossier Musique par défaut
+            return {"intent": "MUSIC_PLAYLIST_ADD_FOLDER",
+                    "params": {"name": pl_name or "ma playlist", "folder": folder},
+                    "confidence": 0.88}
+
+        # Ajout chanson spécifique à une playlist
+        if any(k in lower for k in ["ajoute la chanson", "ajoute ce morceau", "ajoute cette chanson"]):
+            pl_name = ""
+            for prefix in ["a la playlist ", "à la playlist ", "dans la playlist "]:
+                if prefix in lower:
+                    pl_name = lower.split(prefix, 1)[-1].strip()
+                    break
+            query = self._extract_after(lower, ["ajoute la chanson ", "ajoute ce morceau ", "ajoute cette chanson "])
+            # Nettoyer le query (retirer "à la playlist X")
+            for prefix in [" a la playlist", " à la playlist", " dans la playlist"]:
+                if prefix in query:
+                    query = query.split(prefix)[0].strip()
+                    break
+            return {"intent": "MUSIC_PLAYLIST_ADD_SONG",
+                    "params": {"name": pl_name or "ma playlist", "query": query},
+                    "confidence": 0.85}
         if any(k in lower for k in ["joue", "play", "ecoute", "lecture"]) and any(k in lower for k in ["musique", "chanson", "artiste", "titre", "son"]):
             query = self._extract_after(lower, ["joue ", "play ", "ecoute ", "lecture de "])
             return {"intent": "MUSIC_PLAY", "params": {"query": query}, "confidence": 0.75}
@@ -720,6 +1008,31 @@ FORMAT (JSON uniquement) :
             if macro_name in lower:
                 return {"intent": "MACRO_RUN", "params": {"name": macro_name}, "confidence": 0.9}
 
+        # ── Préférences utilisateur ──────────────────────────────────────────
+        pref_triggers = [
+            "mon son de ", "ma musique de ", "j aime jouer quand je ",
+            "quand je code je joue", "quand je travaille je joue",
+            "retiens que mon ", "retiens que ma ", "associe cette",
+            "associe ma playlist", "mon volume de travail",
+            "ma playlist de travail", "ma playlist de codage",
+            "ma playlist de detente", "mon son de codage",
+        ]
+        if any(t in lower for t in pref_triggers):
+            label, value, category = "", "", "music"
+            for ctx in ["travail", "codage", "code", "detente", "relaxation", "sport", "concentration"]:
+                if ctx in lower:
+                    label = ctx
+                    break
+            for v_kw in ["ma playlist", "cette playlist", "mon son", "ma musique"]:
+                if v_kw in lower:
+                    value = v_kw
+                    break
+            return {
+                "intent": "PREFERENCE_SET",
+                "params": {"label": label or "travail", "value": value or "ma playlist", "category": category},
+                "confidence": 0.88,
+            }
+
         # ── Mémoire ───────────────────────────────────────────────────────────
         if any(k in lower for k in ["souviens", "memoire jarvis", "ce dont tu te souviens", "tu te rappelles"]):
             return {"intent": "MEMORY_SHOW", "params": {}, "confidence": 0.85}
@@ -758,6 +1071,18 @@ FORMAT (JSON uniquement) :
         normalized = self._normalize_text(lower)
         intent     = out.get("intent", "UNKNOWN")
         confidence = float(out.get("confidence", 0.0))
+
+        # [FIX CONTEXT BLEEDING] Reject generic words as music commands
+        # Simple affirmations like "oui", "liste les", "liste" should not become
+        # MUSIC_PLAYLIST_LIST unless explicitly about music
+        generic_words = {"oui", "non", "ok", "okay", "liste", "liste les", "affiche", 
+                        "yes", "no", "display", "show", "liste moi"}
+        if intent == "MUSIC_PLAYLIST_LIST" and lower in generic_words:
+            # Only allow if explicitly mentioning playlists/musique/music
+            if not any(k in normalized for k in ["playlist", "musique", "music", "chanson", "song"]):
+                out["intent"]     = "UNKNOWN"
+                out["confidence"] = 0.3  # Low confidence to trigger clarification
+                return out
 
         # Priorité absolue 1 : requête mémoire ne doit pas annuler une extinction
         if any(k in normalized for k in ["tu te souviens", "souviens toi", "tu te rappelles", "rappelle toi"]) \

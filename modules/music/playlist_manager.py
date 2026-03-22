@@ -21,6 +21,7 @@ Structure :
 
 from __future__ import annotations
 
+import copy
 import json
 import threading
 import time
@@ -83,6 +84,115 @@ class PlaylistManager:
             del self._playlists[name]
             self._save()
         return self._ok(f"Playlist '{name}' supprimée.", {"name": name})
+
+    def rename_playlist(self, old_name: str, new_name: str) -> dict:
+        """Renomme une playlist existante."""
+        old_key = old_name.strip().lower()
+        new_key = new_name.strip().lower()
+        if not old_key or not new_key:
+            return self._err("Précise l'ancien et le nouveau nom de playlist.")
+        if old_key == new_key:
+            return self._ok("Le nom est identique, aucun changement.", {"name": old_key, "unchanged": True})
+
+        with self._lock:
+            if old_key not in self._playlists:
+                return self._err(f"Playlist '{old_key}' introuvable.")
+            if new_key in self._playlists:
+                return self._err(f"Playlist '{new_key}' existe déjà.")
+
+            pl = dict(self._playlists[old_key])
+            pl["id"] = new_key
+            pl["name"] = new_key
+            self._playlists[new_key] = pl
+            del self._playlists[old_key]
+            self._save()
+
+        return self._ok(
+            f"Playlist renommée : '{old_key}' -> '{new_key}'.",
+            {"old_name": old_key, "new_name": new_key}
+        )
+
+    def duplicate_playlist(self, source_name: str, target_name: str) -> dict:
+        """Duplique une playlist vers un nouveau nom."""
+        src = source_name.strip().lower()
+        dst = target_name.strip().lower()
+        if not src or not dst:
+            return self._err("Précise la playlist source et le nom cible.")
+        if src == dst:
+            return self._err("Le nom cible doit être différent du nom source.")
+
+        with self._lock:
+            if src not in self._playlists:
+                return self._err(f"Playlist source '{src}' introuvable.")
+            if dst in self._playlists:
+                return self._err(f"Playlist cible '{dst}' existe déjà.")
+
+            src_pl = self._playlists[src]
+            clone = {
+                "id": dst,
+                "name": dst,
+                "songs": copy.deepcopy(src_pl.get("songs", [])),
+                "created_at": int(time.time()),
+                "play_count": 0,
+            }
+            self._playlists[dst] = clone
+            self._save()
+
+        return self._ok(
+            f"Playlist '{src}' dupliquée vers '{dst}'.",
+            {"source": src, "target": dst, "count": len(clone.get("songs", []))}
+        )
+
+    def merge_playlists(self, source_name: str, target_name: str, output_name: str = "") -> dict:
+        """Fusionne deux playlists en évitant les doublons de chemins."""
+        src = source_name.strip().lower()
+        tgt = target_name.strip().lower()
+        out = (output_name or f"{src}_{tgt}").strip().lower()
+        if not src or not tgt:
+            return self._err("Précise les deux playlists à fusionner.")
+        if src == tgt:
+            return self._err("Les playlists source et cible doivent être différentes.")
+
+        with self._lock:
+            if src not in self._playlists:
+                return self._err(f"Playlist source '{src}' introuvable.")
+            if tgt not in self._playlists:
+                return self._err(f"Playlist cible '{tgt}' introuvable.")
+
+            src_songs = list(self._playlists[src].get("songs", []))
+            tgt_songs = list(self._playlists[tgt].get("songs", []))
+
+            merged = []
+            seen = set()
+            for s in src_songs + tgt_songs:
+                p = s.get("path")
+                if not p or p in seen:
+                    continue
+                seen.add(p)
+                merged.append(dict(s))
+
+            if out in self._playlists:
+                self._playlists[out]["songs"] = merged
+                self._playlists[out]["updated_at"] = int(time.time())
+            else:
+                self._playlists[out] = {
+                    "id": out,
+                    "name": out,
+                    "songs": merged,
+                    "created_at": int(time.time()),
+                    "play_count": 0,
+                }
+            self._save()
+
+        return self._ok(
+            f"Playlists '{src}' et '{tgt}' fusionnées dans '{out}'.",
+            {
+                "source": src,
+                "target": tgt,
+                "output": out,
+                "count": len(merged),
+            }
+        )
 
     def list_playlists(self) -> dict:
         """Liste toutes les playlists."""
@@ -217,6 +327,271 @@ class PlaylistManager:
         return self._ok(
             f"{added} chanson(s) ajoutée(s) à '{playlist_name}' depuis '{folder.name}'.",
             {"name": playlist_name, "added": added, "total_in_folder": len(files)}
+        )
+
+    def remove_song_by_title(self, playlist_name: str, song_title: str, remove_all: bool = False) -> dict:
+        """Supprime une chanson d'une playlist en cherchant par titre.
+
+        Stratégie :
+        - priorité à la correspondance exacte (insensible à la casse)
+        - sinon correspondance partielle
+        - par défaut, supprime une seule chanson (la meilleure candidate)
+        - si remove_all=True, supprime toutes les correspondances
+        """
+        name = playlist_name.strip().lower()
+        title_lower = song_title.strip().lower()
+        
+        with self._lock:
+            if name not in self._playlists:
+                return self._err(f"Playlist '{name}' introuvable.")
+            
+            songs = self._playlists[name]["songs"]
+
+            exact_matches = []
+            partial_matches = []
+            for idx, s in enumerate(songs):
+                song_name = str(s.get("title", "")).strip().lower()
+                if not song_name:
+                    continue
+                if song_name == title_lower:
+                    exact_matches.append(idx)
+                elif title_lower in song_name or song_name in title_lower:
+                    partial_matches.append(idx)
+
+            candidates = exact_matches if exact_matches else partial_matches
+            if not candidates:
+                return self._err(f"Chanson '{song_title}' non trouvée dans '{name}'.")
+
+            to_remove = set(candidates if remove_all else [candidates[0]])
+            removed_songs = []
+            remaining = []
+            for idx, s in enumerate(songs):
+                if idx in to_remove:
+                    removed_songs.append(s)
+                else:
+                    remaining.append(s)
+
+            self._playlists[name]["songs"] = remaining
+            self._save()
+        
+        removed_titles = ", ".join([s.get("title", "?") for s in removed_songs])
+        return self._ok(
+            f"{len(removed_songs)} chanson(s) supprimée(s) de '{name}' : {removed_titles}",
+            {
+                "name": name,
+                "removed": len(removed_songs),
+                "count": len(remaining),
+                "multiple_matches": len(candidates) > 1,
+                "removed_all": bool(remove_all),
+            }
+        )
+
+    def move_song(self, playlist_name: str, query: str = "", from_index: int = None, to_index: int = None) -> dict:
+        """Déplace une chanson dans une playlist par index ou par titre partiel."""
+        name = playlist_name.strip().lower()
+        if to_index is None:
+            return self._err("Précise la position de destination (to_index).")
+
+        with self._lock:
+            if name not in self._playlists:
+                return self._err(f"Playlist '{name}' introuvable.")
+
+            songs = list(self._playlists[name].get("songs", []))
+            if not songs:
+                return self._err(f"Playlist '{name}' vide.")
+
+            src_idx = None
+            if from_index is not None:
+                if 1 <= int(from_index) <= len(songs):
+                    src_idx = int(from_index) - 1
+                else:
+                    return self._err(f"Index source invalide: {from_index}.")
+            else:
+                q = (query or "").strip().lower()
+                if not q:
+                    return self._err("Précise un titre (query) ou un index source.")
+                exact = [i for i, s in enumerate(songs) if str(s.get("title", "")).strip().lower() == q]
+                partial = [i for i, s in enumerate(songs) if q in str(s.get("title", "")).strip().lower()]
+                candidates = exact or partial
+                if not candidates:
+                    return self._err(f"Chanson '{query}' non trouvée dans '{name}'.")
+                src_idx = candidates[0]
+
+            dst_idx = int(to_index) - 1
+            dst_idx = max(0, min(dst_idx, len(songs) - 1))
+
+            song = songs.pop(src_idx)
+            songs.insert(dst_idx, song)
+            self._playlists[name]["songs"] = songs
+            self._save()
+
+        return self._ok(
+            f"Chanson déplacée en position {dst_idx + 1} dans '{name}'.",
+            {
+                "name": name,
+                "from_index": src_idx + 1,
+                "to_index": dst_idx + 1,
+                "title": song.get("title", ""),
+            }
+        )
+
+    def clear_playlist(self, playlist_name: str) -> dict:
+        """Vide complètement une playlist (garde la playlist, enlève toutes les chansons)."""
+        name = playlist_name.strip().lower()
+        with self._lock:
+            if name not in self._playlists:
+                return self._err(f"Playlist '{name}' introuvable.")
+            
+            count_before = len(self._playlists[name]["songs"])
+            self._playlists[name]["songs"] = []
+            self._save()
+        
+        return self._ok(
+            f"Playlist '{name}' vidée ({count_before} chanson(s) supprimée(s)).",
+            {"name": name, "cleared": True, "count_removed": count_before}
+        )
+
+    def export_playlist(self, playlist_name: str, fmt: str = "m3u", output_path: str = "") -> dict:
+        """Exporte une playlist en .m3u ou .json."""
+        name = playlist_name.strip().lower()
+        fmt = (fmt or "m3u").strip().lower()
+        if fmt not in {"m3u", "json"}:
+            return self._err("Format d'export non supporté. Utilise 'm3u' ou 'json'.")
+
+        with self._lock:
+            pl = self._playlists.get(name)
+            if not pl:
+                return self._err(f"Playlist '{name}' introuvable.")
+            songs = list(pl.get("songs", []))
+
+        export_dir = PLAYLISTS_FILE.parent / "exports"
+        export_dir.mkdir(parents=True, exist_ok=True)
+        target = Path(output_path) if output_path else (export_dir / f"{name}.{fmt}")
+        if target.suffix.lower() != f".{fmt}":
+            target = target.with_suffix(f".{fmt}")
+
+        try:
+            if fmt == "json":
+                payload = {
+                    "playlist": {
+                        "name": name,
+                        "songs": songs,
+                        "exported_at": int(time.time()),
+                    }
+                }
+                target.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            else:
+                lines = ["#EXTM3U"]
+                for s in songs:
+                    title = s.get("title") or Path(str(s.get("path", ""))).stem
+                    artist = s.get("artist") or ""
+                    label = f"{artist} - {title}".strip(" -")
+                    lines.append(f"#EXTINF:-1,{label}")
+                    lines.append(str(s.get("path", "")))
+                target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            return self._ok(
+                f"Playlist '{name}' exportée en {fmt.upper()}.",
+                {"name": name, "format": fmt, "path": str(target), "count": len(songs)}
+            )
+        except Exception as e:
+            return self._err(f"Export playlist échoué : {e}")
+
+    def import_playlist(self, input_path: str, playlist_name: str = "", mode: str = "replace") -> dict:
+        """Importe une playlist depuis un fichier .m3u ou .json."""
+        src = Path(str(input_path or "").strip())
+        if not src.exists() or not src.is_file():
+            return self._err(f"Fichier d'import introuvable : '{input_path}'")
+
+        mode = (mode or "replace").strip().lower()
+        if mode not in {"replace", "append"}:
+            return self._err("Mode d'import invalide. Utilise 'replace' ou 'append'.")
+
+        target_name = (playlist_name or src.stem).strip().lower()
+        if not target_name:
+            return self._err("Nom de playlist cible vide.")
+
+        imported_songs = []
+        try:
+            ext = src.suffix.lower()
+            if ext == ".json":
+                data = json.loads(src.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and isinstance(data.get("playlist"), dict):
+                    data = data["playlist"].get("songs", [])
+                if not isinstance(data, list):
+                    return self._err("JSON d'import invalide : liste de chansons attendue.")
+                for item in data:
+                    if not isinstance(item, dict):
+                        continue
+                    path = str(item.get("path", "")).strip()
+                    if not path:
+                        continue
+                    imported_songs.append({
+                        "id": item.get("id", Path(path).stem),
+                        "title": item.get("title", Path(path).stem),
+                        "artist": item.get("artist", ""),
+                        "album": item.get("album", ""),
+                        "path": path,
+                    })
+            else:
+                # m3u/m3u8
+                for line in src.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    item = line.strip()
+                    if not item or item.startswith("#"):
+                        continue
+                    p = Path(item)
+                    imported_songs.append({
+                        "id": p.stem,
+                        "title": p.stem,
+                        "artist": "",
+                        "album": "",
+                        "path": str(p),
+                    })
+        except Exception as e:
+            return self._err(f"Lecture du fichier d'import échouée : {e}")
+
+        if not imported_songs:
+            return self._err("Aucune chanson valide trouvée dans le fichier d'import.")
+
+        with self._lock:
+            if target_name not in self._playlists:
+                self._playlists[target_name] = {
+                    "id": target_name,
+                    "name": target_name,
+                    "songs": [],
+                    "created_at": int(time.time()),
+                    "play_count": 0,
+                }
+            if mode == "replace":
+                self._playlists[target_name]["songs"] = []
+
+            existing_paths = {s.get("path") for s in self._playlists[target_name]["songs"]}
+            added = 0
+            for s in imported_songs:
+                if s["path"] in existing_paths:
+                    continue
+                self._playlists[target_name]["songs"].append({
+                    "id": s.get("id", Path(s["path"]).stem),
+                    "title": s.get("title", Path(s["path"]).stem),
+                    "artist": s.get("artist", ""),
+                    "album": s.get("album", ""),
+                    "path": s["path"],
+                    "added_at": int(time.time()),
+                })
+                existing_paths.add(s["path"])
+                added += 1
+
+            self._save()
+
+        return self._ok(
+            f"Import playlist terminé : {added} chanson(s) ajoutée(s) dans '{target_name}'.",
+            {
+                "name": target_name,
+                "added": added,
+                "source": str(src),
+                "mode": mode,
+                "total": len(self._playlists[target_name]["songs"]),
+            }
         )
 
     def get_songs(self, playlist_name: str) -> list[str]:

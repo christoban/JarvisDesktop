@@ -11,10 +11,19 @@ Backends audio (priorité décroissante) :
 
 CORRECTIONS SEMAINE 1 :
   [B1] Suppression de la duplication de _adjust_volume_pycaw.
-       Seule la version avec cast + POINTER + IAudioEndpointVolume est conservée.
   [B2] Correction de _get_volume_pycaw, _set_volume_pycaw, _toggle_mute_pycaw
-       pour utiliser la vraie API pycaw (cast + POINTER) au lieu de
-       device.EndpointVolume qui n'existe pas dans pycaw standard.
+       pour utiliser la vraie API pycaw (cast + POINTER + IAudioEndpointVolume).
+
+CORRECTION [B3] — COM Threading :
+  pycaw utilise l'API COM de Windows. COM doit être initialisé dans CHAQUE
+  thread qui l'utilise. Jarvis tourne en multi-thread (bridge HTTP) → les
+  appels pycaw depuis les threads secondaires échouaient avec une exception
+  "CoInitialize has not been called" → success=False malgré que le volume
+  changeait parfois.
+
+  Fix : chaque méthode pycaw appelle pythoncom.CoInitialize() avant et
+  pythoncom.CoUninitialize() dans un finally. Si pythoncom n'est pas
+  disponible, on continue sans (Windows gère parfois ça seul).
 """
 
 import os
@@ -71,6 +80,31 @@ def _run(cmd: list, timeout: int = 5) -> tuple[bool, str]:
         return False, ""
 
 
+def _coinit():
+    """
+    [B3] Initialise COM pour le thread courant.
+    Retourne True si CoInitialize a été appelé (et doit être suivi de CoUninitialize).
+    Silencieux si pythoncom absent ou déjà initialisé.
+    """
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+        return True
+    except Exception:
+        return False
+
+
+def _couninit(did_init: bool):
+    """[B3] Libère COM si on l'a initialisé."""
+    if not did_init:
+        return
+    try:
+        import pythoncom
+        pythoncom.CoUninitialize()
+    except Exception:
+        pass
+
+
 class AudioManager:
     """
     Contrôle audio multi-plateforme.
@@ -107,7 +141,7 @@ class AudioManager:
 
     def set_volume(self, level: int) -> dict:
         level = max(0, min(level, 100))
-        logger.info(f"Volume → {level}%")
+        logger.info(f"Volume -> {level}%")
         return self._set_volume_absolute(level)
 
     def get_volume(self) -> dict:
@@ -138,118 +172,38 @@ class AudioManager:
         return self._err("Aucun backend audio disponible pour muter.")
 
     # ══════════════════════════════════════════════════════════════════════════
-    #  MUSIQUE LOCALE
-    # ══════════════════════════════════════════════════════════════════════════
-
-    def play(self, query: str, music_dirs: list = None) -> dict:
-        """
-        Joue une musique locale en recherchant par nom/artiste.
-        Ouvre avec l'application par défaut du système.
-        Pour un contrôle avancé (playlists, VLC), voir le module music/ (semaine 3).
-        """
-        query = query.strip()
-        if not query:
-            return self._err("Précise le nom d'une chanson ou d'un artiste.")
-
-        logger.info(f"Lecture musique : '{query}'")
-
-        # Cas 1 : chemin absolu fourni directement
-        p = Path(query)
-        if p.is_absolute() and p.exists() and p.suffix.lower() in MUSIC_EXTENSIONS:
-            return self._play_file(str(p))
-
-        # Cas 2 : rechercher par nom dans les dossiers musicaux
-        dirs = music_dirs or DEFAULT_MUSIC_DIRS
-        found = self._search_music(query, dirs)
-
-        if not found:
-            return self._err(
-                f"Aucun fichier musical trouvé pour '{query}'.\n"
-                f"  Dossiers scannés : {', '.join(str(d) for d in dirs if Path(d).exists())}",
-                {"query": query, "searched_dirs": [str(d) for d in dirs]}
-            )
-
-        return self._play_file(found[0], all_results=found)
-
-    def play_file(self, path: str) -> dict:
-        """Joue directement un fichier musical par son chemin."""
-        p = Path(path)
-        if not p.exists():
-            return self._err(f"Fichier introuvable : '{path}'")
-        if p.suffix.lower() not in MUSIC_EXTENSIONS:
-            return self._err(
-                f"Format non supporté : '{p.suffix}'. "
-                f"Formats acceptés : {', '.join(MUSIC_EXTENSIONS)}"
-            )
-        return self._play_file(str(p))
-
-    def list_music(self, music_dirs: list = None) -> dict:
-        """Liste tous les fichiers musicaux trouvés dans les dossiers par défaut."""
-        dirs  = music_dirs or DEFAULT_MUSIC_DIRS
-        files = []
-        for d in dirs:
-            d = Path(d)
-            if d.exists():
-                for ext in MUSIC_EXTENSIONS:
-                    files.extend(d.glob(f"*{ext}"))
-                    files.extend(d.glob(f"*{ext.upper()}"))
-
-        files = sorted(set(files), key=lambda f: f.name.lower())
-        file_dicts = [
-            {"name": f.name, "path": str(f),
-             "size": f"{f.stat().st_size / 1024**2:.1f} MB"}
-            for f in files
-        ]
-
-        if not file_dicts:
-            return self._ok(
-                "Aucun fichier musical trouvé dans les dossiers par défaut.",
-                {"files": [], "count": 0}
-            )
-
-        lines = [f"{'TITRE':<50} TAILLE", "-" * 65]
-        for fdict in file_dicts[:20]:
-            lines.append(f"{fdict['name'][:49]:<50} {fdict['size']:>8}")
-        if len(file_dicts) > 20:
-            lines.append(f"  ... et {len(file_dicts) - 20} autre(s)")
-
-        return self._ok(
-            f"{len(file_dicts)} fichier(s) musical(aux) trouvé(s).",
-            {"files": file_dicts, "count": len(file_dicts), "display": "\n".join(lines)}
-        )
-
-    def pause(self) -> dict:
-        logger.info("Pause/Resume")
-        return self._send_media_key("pause")
-
-    def next_track(self) -> dict:
-        logger.info("Piste suivante")
-        return self._send_media_key("next")
-
-    def prev_track(self) -> dict:
-        logger.info("Piste précédente")
-        return self._send_media_key("prev")
-
-    def stop(self) -> dict:
-        logger.info("Stop")
-        return self._send_media_key("stop")
-
-    # ══════════════════════════════════════════════════════════════════════════
     #  BACKENDS VOLUME — Windows (pycaw)
     # ══════════════════════════════════════════════════════════════════════════
 
+    @staticmethod
+    def _get_pycaw_endpoint_volume():
+        """
+        Retourne l'endpoint volume pycaw en mode compatible multi-versions.
+        Certaines versions exposent `EndpointVolume`, d'autres nécessitent
+        l'appel COM `Activate`.
+        """
+        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        devices = AudioUtilities.GetSpeakers()
+
+        # pycaw récent: AudioDevice avec propriété EndpointVolume.
+        endpoint = getattr(devices, "EndpointVolume", None)
+        if endpoint is not None:
+            return endpoint
+
+        # pycaw legacy: IMMDevice avec Activate.
+        from ctypes import cast, POINTER
+        from comtypes import CLSCTX_ALL
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        return cast(interface, POINTER(IAudioEndpointVolume))
+
     def _adjust_volume_pycaw(self, delta: int) -> dict:
         """
-        CORRECTION B1 : version unique avec la vraie API pycaw.
-        Suppression de la deuxième définition qui utilisait device.EndpointVolume.
+        [B1] Version unique avec la vraie API pycaw.
+        [B3] CoInitialize/CoUninitialize pour compatibilité multi-thread.
         """
+        did_init = _coinit()
         try:
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume = self._get_pycaw_endpoint_volume()
             current = round(volume.GetMasterVolumeLevelScalar() * 100)
             new_level = max(0, min(100, current + delta))
             volume.SetMasterVolumeLevelScalar(new_level / 100, None)
@@ -260,58 +214,83 @@ class AudioManager:
             )
         except Exception as e:
             return self._err(f"pycaw erreur : {str(e)}")
+        finally:
+            _couninit(did_init)
 
     def _get_volume_pycaw(self) -> dict:
         """
-        CORRECTION B2 : utilise la vraie API pycaw avec cast + POINTER.
-        L'ancienne version utilisait device.EndpointVolume qui n'existe pas.
+        [B2] Vraie API pycaw avec cast + POINTER.
+        [B3] CoInitialize/CoUninitialize pour compatibilité multi-thread.
         """
+        did_init = _coinit()
         try:
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume = self._get_pycaw_endpoint_volume()
             level = round(volume.GetMasterVolumeLevelScalar() * 100)
             muted = bool(volume.GetMute())
             return self._ok(f"Volume : {level}%", {"level": level, "muted": muted, "backend": "pycaw"})
         except Exception as e:
             return self._err(f"pycaw get_volume erreur : {str(e)}")
+        finally:
+            _couninit(did_init)
 
     def _set_volume_pycaw(self, level: int) -> dict:
         """
-        CORRECTION B2 : utilise la vraie API pycaw avec cast + POINTER.
+        [B2] Vraie API pycaw avec cast + POINTER.
+        [B3] CoInitialize/CoUninitialize pour compatibilité multi-thread.
         """
+        did_init = _coinit()
         try:
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume = self._get_pycaw_endpoint_volume()
             volume.SetMasterVolumeLevelScalar(level / 100.0, None)
-            return self._ok(f"Volume réglé à {level}%.", {"level": level, "backend": "pycaw"})
+            # Vérification : relire le volume pour confirmer le changement
+            actual = round(volume.GetMasterVolumeLevelScalar() * 100)
+            return self._ok(
+                f"Volume réglé à {actual}%.",
+                {"level": actual, "requested": level, "backend": "pycaw"}
+            )
         except Exception as e:
-            return self._err(f"pycaw set_volume erreur : {str(e)}")
+            logger.warning(f"pycaw set_volume échoué : {e} — fallback PowerShell")
+            # Fallback PowerShell si pycaw échoue vraiment
+            return self._set_volume_powershell_direct(level)
+        finally:
+            _couninit(did_init)
+
+    def _set_volume_powershell_direct(self, level: int) -> dict:
+        """Fallback PowerShell pour régler le volume absolu."""
+        script = (
+            f"$vol = {level} / 100.0; "
+            f"Add-Type -TypeDefinition '"
+            f"using System.Runtime.InteropServices; "
+            f"public class Vol {{"
+            f"[DllImport(\"winmm.dll\")] public static extern int waveOutSetVolume(IntPtr h, uint v); "
+            f"}}'; "
+            f"$v = [uint32]($vol * 65535); "
+            f"[Vol]::waveOutSetVolume([IntPtr]::Zero, ($v -bor ($v -shl 16)))"
+        )
+        ok, _ = _run(["powershell", "-Command", script])
+        if ok:
+            return self._ok(
+                f"Volume réglé à {level}%.",
+                {"level": level, "backend": "powershell_fallback"}
+            )
+        return self._err(f"Impossible de régler le volume à {level}%.")
 
     def _toggle_mute_pycaw(self) -> dict:
         """
-        CORRECTION B2 : utilise la vraie API pycaw avec cast + POINTER.
+        [B2] Vraie API pycaw avec cast + POINTER.
+        [B3] CoInitialize/CoUninitialize pour compatibilité multi-thread.
         """
+        did_init = _coinit()
         try:
-            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-            from ctypes import cast, POINTER
-            from comtypes import CLSCTX_ALL
-            devices = AudioUtilities.GetSpeakers()
-            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume = self._get_pycaw_endpoint_volume()
             is_muted = bool(volume.GetMute())
             volume.SetMute(not is_muted, None)
             new_state = "coupé" if not is_muted else "rétabli"
             return self._ok(f"Son {new_state}.", {"muted": not is_muted, "backend": "pycaw"})
         except Exception as e:
             return self._err(f"pycaw mute erreur : {str(e)}")
+        finally:
+            _couninit(did_init)
 
     # ══════════════════════════════════════════════════════════════════════════
     #  BACKENDS VOLUME — Windows PowerShell (fallback)
@@ -319,7 +298,6 @@ class AudioManager:
 
     def _adjust_volume_powershell(self, delta: int) -> dict:
         """Ajuste le volume via PowerShell (fallback si pycaw absent)."""
-        # Lire le volume actuel
         get_script = (
             "$obj = New-Object -ComObject WScript.Shell; "
             "Add-Type -TypeDefinition '"
@@ -492,10 +470,109 @@ class AudioManager:
         if SYSTEM == "Darwin":
             ok, _ = _run(["osascript", "-e", f"set volume output volume {level}"])
             return self._ok(f"Volume → {level}%.", {"level": level, "backend": "osascript"}) if ok else self._err("Erreur osascript")
+        if SYSTEM == "Windows":
+            return self._set_volume_powershell_direct(level)
         return self._err("Aucun backend disponible pour régler le volume.")
 
     # ══════════════════════════════════════════════════════════════════════════
     #  LECTURE MUSIQUE
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def play(self, query: str, music_dirs: list = None) -> dict:
+        """
+        Joue une musique locale en recherchant par nom/artiste.
+        Ouvre avec l'application par défaut du système.
+        Pour un contrôle avancé (playlists, VLC), voir le module music/ (semaine 3).
+        """
+        query = query.strip()
+        if not query:
+            return self._err("Précise le nom d'une chanson ou d'un artiste.")
+
+        logger.info(f"Lecture musique : '{query}'")
+
+        # Cas 1 : chemin absolu fourni directement
+        p = Path(query)
+        if p.is_absolute() and p.exists() and p.suffix.lower() in MUSIC_EXTENSIONS:
+            return self._play_file(str(p))
+
+        # Cas 2 : rechercher par nom dans les dossiers musicaux
+        dirs = music_dirs or DEFAULT_MUSIC_DIRS
+        found = self._search_music(query, dirs)
+
+        if not found:
+            return self._err(
+                f"Aucun fichier musical trouvé pour '{query}'.\n"
+                f"  Dossiers scannés : {', '.join(str(d) for d in dirs if Path(d).exists())}",
+                {"query": query, "searched_dirs": [str(d) for d in dirs]}
+            )
+
+        return self._play_file(found[0], all_results=found)
+
+    def play_file(self, path: str) -> dict:
+        """Joue directement un fichier musical par son chemin."""
+        p = Path(path)
+        if not p.exists():
+            return self._err(f"Fichier introuvable : '{path}'")
+        if p.suffix.lower() not in MUSIC_EXTENSIONS:
+            return self._err(
+                f"Format non supporté : '{p.suffix}'. "
+                f"Formats acceptés : {', '.join(MUSIC_EXTENSIONS)}"
+            )
+        return self._play_file(str(p))
+
+    def list_music(self, music_dirs: list = None) -> dict:
+        """Liste tous les fichiers musicaux trouvés dans les dossiers par défaut."""
+        dirs  = music_dirs or DEFAULT_MUSIC_DIRS
+        files = []
+        for d in dirs:
+            d = Path(d)
+            if d.exists():
+                for ext in MUSIC_EXTENSIONS:
+                    files.extend(d.glob(f"*{ext}"))
+                    files.extend(d.glob(f"*{ext.upper()}"))
+
+        files = sorted(set(files), key=lambda f: f.name.lower())
+        file_dicts = [
+            {"name": f.name, "path": str(f),
+             "size": f"{f.stat().st_size / 1024**2:.1f} MB"}
+            for f in files
+        ]
+
+        if not file_dicts:
+            return self._ok(
+                "Aucun fichier musical trouvé dans les dossiers par défaut.",
+                {"files": [], "count": 0}
+            )
+
+        lines = [f"{'TITRE':<50} TAILLE", "-" * 65]
+        for fdict in file_dicts[:20]:
+            lines.append(f"{fdict['name'][:49]:<50} {fdict['size']:>8}")
+        if len(file_dicts) > 20:
+            lines.append(f"  ... et {len(file_dicts) - 20} autre(s)")
+
+        return self._ok(
+            f"{len(file_dicts)} fichier(s) musical(aux) trouvé(s).",
+            {"files": file_dicts, "count": len(file_dicts), "display": "\n".join(lines)}
+        )
+
+    def pause(self) -> dict:
+        logger.info("Pause/Resume")
+        return self._send_media_key("pause")
+
+    def next_track(self) -> dict:
+        logger.info("Piste suivante")
+        return self._send_media_key("next")
+
+    def prev_track(self) -> dict:
+        logger.info("Piste précédente")
+        return self._send_media_key("prev")
+
+    def stop(self) -> dict:
+        logger.info("Stop")
+        return self._send_media_key("stop")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  LECTURE MUSIQUE — helpers
     # ══════════════════════════════════════════════════════════════════════════
 
     def _search_music(self, query: str, dirs: list) -> list:
@@ -516,7 +593,6 @@ class AudioManager:
                             results.append(str(f))
             except PermissionError:
                 continue
-        # Dédupliquer en préservant l'ordre
         seen = set()
         unique = []
         for r in results:
@@ -547,7 +623,6 @@ class AudioManager:
             return self._ok(f"Lecture : '{name}'", data)
 
         except AttributeError:
-            # os.startfile non dispo sur Linux
             try:
                 subprocess.Popen(["xdg-open", path],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
