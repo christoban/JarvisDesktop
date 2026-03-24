@@ -369,7 +369,10 @@ class Agent:
         # Some intents (like MUSIC_PLAYLIST_LIST) have formatted display tables
         # that should be shown to the user alongside the natural message
         if result and isinstance(result, dict):
-            display_data = result.get("data", {}).get("display", "")
+            data_block = result.get("data")
+            if not isinstance(data_block, dict):
+                data_block = {}
+            display_data = data_block.get("display", "")
             if display_data and isinstance(display_data, str):
                 result["message"] = f"{jarvis_message}\n\n{display_data}"
 

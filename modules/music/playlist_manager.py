@@ -50,6 +50,32 @@ class PlaylistManager:
 
     # ── API publique ──────────────────────────────────────────────────────────
 
+    def _resolve_playlist_key(self, raw_name: str) -> str | None:
+        """Résout un nom utilisateur vers une clé playlist existante de façon sûre.
+
+        Règles:
+        - correspondance exacte (insensible à la casse via normalisation)
+        - alias avec/sans préfixe "playlist "
+        - cas naturel "de X" -> essaie aussi "playlist de X"
+        - pas de matching flou large pour éviter les suppressions accidentelles
+        """
+        name = (raw_name or "").strip().lower()
+        if not name:
+            return None
+
+        candidates = [name]
+        if name.startswith("playlist "):
+            candidates.append(name[len("playlist "):].strip())
+        else:
+            candidates.append(f"playlist {name}")
+        if name.startswith("de "):
+            candidates.append(f"playlist {name}")
+
+        for c in candidates:
+            if c in self._playlists:
+                return c
+        return None
+
     def create_playlist(self, name: str) -> dict:
         """Crée une nouvelle playlist vide."""
         name = name.strip().lower()
@@ -77,13 +103,15 @@ class PlaylistManager:
 
     def delete_playlist(self, name: str) -> dict:
         """Supprime une playlist."""
+        raw_name = name
         name = name.strip().lower()
         with self._lock:
-            if name not in self._playlists:
-                return self._err(f"Playlist '{name}' introuvable.")
-            del self._playlists[name]
+            key = self._resolve_playlist_key(name)
+            if key is None:
+                return self._err(f"Playlist '{raw_name.strip() or name}' introuvable.")
+            del self._playlists[key]
             self._save()
-        return self._ok(f"Playlist '{name}' supprimée.", {"name": name})
+        return self._ok(f"Playlist '{key}' supprimée.", {"name": key})
 
     def rename_playlist(self, old_name: str, new_name: str) -> dict:
         """Renomme une playlist existante."""
@@ -228,19 +256,18 @@ class PlaylistManager:
         """Retourne une playlist par nom (None si inexistante)."""
         name = name.strip().lower()
         with self._lock:
-            # Correspondance exacte
-            if name in self._playlists:
-                return dict(self._playlists[name])
-            # Correspondance partielle
-            for key, pl in self._playlists.items():
-                if name in key or key in name:
+            key = self._resolve_playlist_key(name)
+            if key is not None:
+                return dict(self._playlists[key])
+            # fallback partiel pour usages non destructifs (lecture/recherche)
+            for k, pl in self._playlists.items():
+                if name in k or k in name:
                     return dict(pl)
         return None
 
     def add_song(self, playlist_name: str, song: dict) -> dict:
         """
         Ajoute une chanson à une playlist.
-
         song doit avoir au minimum : {"id": str, "title": str, "path": str}
         """
         name = playlist_name.strip().lower()

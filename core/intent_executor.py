@@ -966,6 +966,19 @@ class IntentExecutor:
                         f"Playlist '{name}' supprimée.",
                         {"name": name, "deleted": True}
                     )
+                # UX: si introuvable, proposer des playlists existantes.
+                all_pl = music._playlists.list_playlists()
+                names = [pl.get("name", "") for pl in (all_pl.get("data") or {}).get("playlists", []) if pl.get("name")]
+                if "introuvable" in str(result.get("message", "")).lower() and names:
+                    sample = ", ".join(names[:8])
+                    return self._err(
+                        f"Je n'ai pas trouvé la playlist '{name}'. Donne un nom existant, par exemple : {sample}.",
+                        {
+                            "name": name,
+                            "exists": False,
+                            "available_playlists": names,
+                        },
+                    )
                 return result
         except Exception as e:
             return self._err(f"Erreur suppression playlist : {e}")
@@ -1216,21 +1229,22 @@ class IntentExecutor:
                 # A des chansons → jouer directement
                 return music.play_playlist(name)
 
-            # ── Cas 2 : playlist inexistante → créer vide et informer ────
-            create_result = music._playlists.create_playlist(name)
-            if create_result.get("success"):
-                return self._err(
-                    f"J'ai créé la playlist '{name}' qui est pour le moment vide. "
-                    f"Dis 'ajoute une chanson à {name}' ou 'ajoute le dossier Musique à {name}' "
-                    f"pour la remplir et la lancer.",
-                    {
-                        "playlist": name,
-                        "created": True,
-                        "empty": True,
-                        "awaiting_choice": True,
-                    }
-                )
-            return create_result
+            # ── Cas 2 : playlist inexistante → NE PAS créer automatiquement ─
+            listed = music._playlists.list_playlists()
+            available = [pl.get("name", "") for pl in (listed.get("data") or {}).get("playlists", []) if pl.get("name")]
+            sample = ", ".join(available[:8]) if available else "aucune playlist"
+            return self._err(
+                f"Je n'ai pas trouvé la playlist '{name}'. "
+                f"Veux-tu que je la crée, ou tu préfères une playlist existante ? "
+                f"Playlists disponibles : {sample}.",
+                {
+                    "playlist": name,
+                    "not_found": True,
+                    "awaiting_choice": True,
+                    "choices": ["creer", "choisir existante", "annuler"],
+                    "available_playlists": available,
+                }
+            )
 
 
         except Exception as e:
@@ -1927,8 +1941,8 @@ class IntentExecutor:
 
     @staticmethod
     def _ok(message: str, data=None) -> dict:
-        return {"success": True,  "message": message, "data": data}
+        return {"success": True,  "message": message, "data": data if isinstance(data, dict) else {}}
 
     @staticmethod
     def _err(message: str, data=None) -> dict:
-        return {"success": False, "message": message, "data": data}
+        return {"success": False, "message": message, "data": data if isinstance(data, dict) else {}}

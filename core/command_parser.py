@@ -700,8 +700,8 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["cree playlist", "creer playlist", "nouvelle playlist", "create playlist"]):
             name = self._extract_after(lower, ["cree playlist ", "creer playlist ", "nouvelle playlist ", "create playlist "])
             return {"intent": "MUSIC_PLAYLIST_CREATE", "params": {"name": name or "ma playlist"}, "confidence": 0.85}
-        if any(k in lower for k in ["joue playlist", "lance playlist", "joue la playlist", "play playlist"]):
-            name = self._extract_after(lower, ["joue playlist ", "lance playlist ", "joue la playlist ", "play playlist "])
+        if any(k in lower for k in ["joue playlist", "lance playlist", "joue la playlist", "joue ma playlist", "play playlist"]):
+            name = self._extract_after(lower, ["joue playlist ", "lance playlist ", "joue la playlist ", "joue ma playlist ", "play playlist "])
             return {"intent": "MUSIC_PLAYLIST_PLAY", "params": {"name": name or ""}, "confidence": 0.85}
         if any(k in lower for k in ["liste mes playlists", "mes playlists", "affiche playlists", "list playlists"]):
             return {"intent": "MUSIC_PLAYLIST_LIST", "params": {}, "confidence": 0.9}
@@ -1105,6 +1105,27 @@ FORMAT (JSON uniquement) :
                 out["params"]     = {}
                 out["confidence"] = max(confidence, 0.9)
                 return out
+
+        # Correction racine: Groq peut renvoyer un placeholder ('ma playlist')
+        # alors que la commande contient un nom explicite après "playlist".
+        if intent in {"MUSIC_PLAYLIST_PLAY", "MUSIC_PLAYLIST_DELETE", "MUSIC_PLAYLIST_CLEAR"}:
+            params = out.get("params") if isinstance(out.get("params"), dict) else {}
+            parsed_name = str(params.get("name", "")).strip().lower()
+            placeholders = {"", "ma playlist", "playlist", "la playlist", "ma"}
+            if parsed_name in placeholders:
+                patterns = {
+                    "MUSIC_PLAYLIST_PLAY": r"(?:joue|lance)\s+(?:la|ma)?\s*playlist\s+(.+)$",
+                    "MUSIC_PLAYLIST_DELETE": r"(?:supprime|efface|delete)\s+(?:la|ma|une)?\s*playlist\s+(.+)$",
+                    "MUSIC_PLAYLIST_CLEAR": r"(?:vide|clear)\s+(?:la|ma|une)?\s*playlist\s+(.+)$",
+                }
+                m = re.search(patterns[intent], lower)
+                if m:
+                    extracted = m.group(1).strip()
+                    if extracted and extracted not in placeholders:
+                        out["params"] = dict(params)
+                        out["params"]["name"] = extracted
+                        out["confidence"] = max(confidence, 0.9)
+                        return out
 
         # Si Groq est très confiant, ne pas toucher
         if confidence >= 0.85:

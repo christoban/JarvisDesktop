@@ -100,6 +100,9 @@ class VLCController:
 
         with self._lock:
             try:
+                # Assure une transition propre: arrêter toute lecture en cours
+                # (playlist précédente ou fichier isolé) avant de charger le nouveau média.
+                self._hard_stop_locked()
                 media = self._instance.media_new(str(p))
                 self._player.set_media(media)
                 self._player.play()
@@ -125,6 +128,9 @@ class VLCController:
 
         with self._lock:
             try:
+                # Transition propre: couper la lecture active avant de remplacer la liste.
+                self._hard_stop_locked()
+
                 # Reconstruire la MediaList
                 self._media_list.lock()
                 while self._media_list.count() > 0:
@@ -197,7 +203,7 @@ class VLCController:
             return self._err("VLC non disponible.")
         with self._lock:
             try:
-                self._list_player.stop()
+                self._hard_stop_locked()
                 return self._ok("Lecture arrêtée.", {"action": "stop"})
             except Exception as e:
                 return self._err(f"Erreur stop VLC : {e}")
@@ -336,6 +342,22 @@ class VLCController:
         )
 
     # ── Helpers privés ────────────────────────────────────────────────────────
+
+    def _hard_stop_locked(self):
+        """Stoppe de façon robuste toutes les voies de lecture VLC.
+
+        Méthode appelée sous verrou uniquement.
+        """
+        try:
+            self._list_player.stop()
+        except Exception:
+            pass
+        try:
+            self._player.stop()
+        except Exception:
+            pass
+        # Petite latence pour laisser VLC basculer d'état avant rechargement.
+        time.sleep(0.05)
 
     def _get_current_name(self) -> str:
         """Retourne le nom du morceau courant (sans verrou — appelé dans verrou)."""

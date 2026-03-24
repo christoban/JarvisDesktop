@@ -1,8 +1,8 @@
 {
-  "last_session": "2026-03-22 07:51",
+  "last_session": "2026-03-24 23:47",
   "preferences": {
     "app_counts": {
-      "chrome": 7,
+      "chrome": 8,
       "bloc-notes": 3
     },
     "favorite_apps": [
@@ -20,12 +20,12 @@
       "E:\\",
       "C:\\Users\\Public\\Desktop"
     ],
-    "volume": 50
+    "volume": 30
   },
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-21 18:34"
+      "learned": "2026-03-24 23:51"
     },
     "prenom": {
       "value": "Christophe",
@@ -323,6 +323,13 @@
         "name": "chrome",
         "pid": null,
         "args": [],
+        "timestamp": 1774392666,
+        "datetime": "2026-03-24 23:51"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
         "timestamp": 1774114485,
         "datetime": "2026-03-21 18:34"
       },
@@ -433,6 +440,24 @@
       }
     ],
     "browser": [
+      {
+        "intent": "BROWSER_OPEN_RESULT",
+        "url": "https://www.aufeminin.com/societe/news-societe/football-3/coupe-du-monde-2026-sept-fois-plus-les-tarifs-exorbitants-des-billets-provoquent-la-colere-des-supporters-ils-passent-a-loffensive-2713268.html",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774392762,
+        "datetime": "2026-03-24 23:52"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "",
+        "query": "Coupe du monde 2026",
+        "site": "",
+        "tabs": 8,
+        "timestamp": 1774392729,
+        "datetime": "2026-03-24 23:52"
+      },
       {
         "intent": "BROWSER_RELOAD",
         "url": "",
@@ -562,6 +587,27 @@
     ],
     "network": [
       {
+        "intent": "BLUETOOTH_ENABLE",
+        "ssid": "",
+        "action": "bluetooth_enable",
+        "timestamp": 1774190230,
+        "datetime": "2026-03-22 15:37"
+      },
+      {
+        "intent": "WIFI_ENABLE",
+        "ssid": "",
+        "action": "wifi_enable",
+        "timestamp": 1774190196,
+        "datetime": "2026-03-22 15:36"
+      },
+      {
+        "intent": "WIFI_ENABLE",
+        "ssid": "",
+        "action": "wifi_enable",
+        "timestamp": 1774190140,
+        "datetime": "2026-03-22 15:35"
+      },
+      {
         "intent": "WIFI_DISABLE",
         "ssid": "",
         "action": "wifi_disable",
@@ -673,6 +719,14 @@
     "audio": [
       {
         "intent": "AUDIO_VOLUME_SET",
+        "volume": 30,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774188243,
+        "datetime": "2026-03-22 15:04"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
         "volume": 50,
         "track": "",
         "action": "volume_set",
@@ -706,9 +760,9 @@
     ]
   },
   "stats": {
-    "session_count": 60,
-    "total_commands": 88
+    "session_count": 68,
+    "total_commands": 95
   },
-  "session_count": 60,
-  "_saved_at": "2026-03-22 07:51:02"
+  "session_count": 68,
+  "_saved_at": "2026-03-24 23:52:42"
 }

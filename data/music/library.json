@@ -11,8 +11,20 @@
       "play_count": 0,
       "last_played": 0,
       "added_at": 1774043212
+    },
+    {
+      "id": "53c4591cb3be",
+      "title": "Boku mixed",
+      "artist": "",
+      "album": "",
+      "genre": "",
+      "duration": 237,
+      "path": "C:\\Users\\USER\\Desktop\\Boku mixed.mp3",
+      "play_count": 0,
+      "last_played": 0,
+      "added_at": 1774186990
     }
   ],
   "history": [],
-  "last_save": 1774043212
+  "last_save": 1774186990
 }
