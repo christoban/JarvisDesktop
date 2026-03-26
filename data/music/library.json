@@ -23,8 +23,20 @@
       "play_count": 0,
       "last_played": 0,
       "added_at": 1774186990
+    },
+    {
+      "id": "b763ffe8f44f",
+      "title": "videoplayback",
+      "artist": "",
+      "album": "",
+      "genre": "",
+      "duration": 3324,
+      "path": "C:\\Users\\USER\\Downloads\\videoplayback.m4a",
+      "play_count": 0,
+      "last_played": 0,
+      "added_at": 1774396244
     }
   ],
   "history": [],
-  "last_save": 1774186990
+  "last_save": 1774396244
 }

@@ -1,31 +1,36 @@
 {
-  "last_session": "2026-03-24 23:47",
+  "last_session": "2026-03-25 16:30",
   "preferences": {
     "app_counts": {
-      "chrome": 8,
-      "bloc-notes": 3
+      "chrome": 11,
+      "bloc-notes": 3,
+      "notepad": 1
     },
     "favorite_apps": [
       "chrome",
-      "bloc-notes"
+      "bloc-notes",
+      "notepad"
     ],
     "folder_counts": {
       "E:\\": 1,
       "C:\\Users\\Public\\Desktop": 1,
       "Bureau\\JarvisDesktop": 1,
-      "C:\\Users\\USER\\Documents": 2
+      "C:\\Users\\USER\\Documents": 3,
+      "C:\\PROGRA~1\\KMSpico\\temp\\tmpg4vzueht\\test_jarvis_agent": 1,
+      "C:\\PROGRA~1\\KMSpico\\temp\\tmpt_bp_lgr\\jarvis_s4_integration": 1,
+      "C:\\Program Files\\KMSpico\\temp": 1
     },
     "favorite_folders": [
       "C:\\Users\\USER\\Documents",
       "E:\\",
       "C:\\Users\\Public\\Desktop"
     ],
-    "volume": 30
+    "volume": 70
   },
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-24 23:51"
+      "learned": "2026-03-25 16:24"
     },
     "prenom": {
       "value": "Christophe",
@@ -46,6 +51,76 @@
   },
   "events": {
     "system": [
+      {
+        "intent": "SYSTEM_FULL_REPORT",
+        "action": "system_full_report",
+        "delay_seconds": null,
+        "timestamp": 1774451541,
+        "datetime": "2026-03-25 16:12"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774451484,
+        "datetime": "2026-03-25 16:11"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774451292,
+        "datetime": "2026-03-25 16:08"
+      },
+      {
+        "intent": "SYSTEM_FULL_REPORT",
+        "action": "system_full_report",
+        "delay_seconds": null,
+        "timestamp": 1774449026,
+        "datetime": "2026-03-25 15:30"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774448969,
+        "datetime": "2026-03-25 15:29"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774448914,
+        "datetime": "2026-03-25 15:28"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774448855,
+        "datetime": "2026-03-25 15:27"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774448796,
+        "datetime": "2026-03-25 15:26"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774448743,
+        "datetime": "2026-03-25 15:25"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774444932,
+        "datetime": "2026-03-25 14:22"
+      },
       {
         "intent": "SYSTEM_SHUTDOWN",
         "action": "system_shutdown",
@@ -304,21 +379,37 @@
         "action": "system_disk",
         "timestamp": 1774064427,
         "datetime": "2026-03-21 04:40"
-      },
-      {
-        "intent": "SYSTEM_DISK",
-        "action": "system_disk",
-        "timestamp": 1774064404,
-        "datetime": "2026-03-21 04:40"
-      },
-      {
-        "intent": "SYSTEM_DISK",
-        "action": "system_disk",
-        "timestamp": 1774064243,
-        "datetime": "2026-03-21 04:37"
       }
     ],
     "app": [
+      {
+        "name": "notepad",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774452626,
+        "datetime": "2026-03-25 16:30"
+      },
+      {
+        "name": "chrome",
+        "pid": 12,
+        "args": [],
+        "timestamp": 1774452269,
+        "datetime": "2026-03-25 16:24"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774451371,
+        "datetime": "2026-03-25 16:09"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774449194,
+        "datetime": "2026-03-25 15:33"
+      },
       {
         "name": "chrome",
         "pid": null,
@@ -399,6 +490,38 @@
     ],
     "folder": [
       {
+        "path": "C:\\Program Files\\KMSpico\\temp",
+        "name": "temp",
+        "is_dir": true,
+        "parent": "C:\\Program Files\\KMSpico",
+        "timestamp": 1774451713,
+        "datetime": "2026-03-25 16:15"
+      },
+      {
+        "path": "C:\\PROGRA~1\\KMSpico\\temp\\tmpt_bp_lgr\\jarvis_s4_integration",
+        "name": "jarvis_s4_integration",
+        "is_dir": true,
+        "parent": "C:\\PROGRA~1\\KMSpico\\temp\\tmpt_bp_lgr",
+        "timestamp": 1774451656,
+        "datetime": "2026-03-25 16:14"
+      },
+      {
+        "path": "C:\\PROGRA~1\\KMSpico\\temp\\tmpg4vzueht\\test_jarvis_agent",
+        "name": "test_jarvis_agent",
+        "is_dir": true,
+        "parent": "C:\\PROGRA~1\\KMSpico\\temp\\tmpg4vzueht",
+        "timestamp": 1774449529,
+        "datetime": "2026-03-25 15:38"
+      },
+      {
+        "path": "C:\\Users\\USER\\Documents",
+        "name": "Documents",
+        "is_dir": true,
+        "parent": "C:\\Users\\USER",
+        "timestamp": 1774444966,
+        "datetime": "2026-03-25 14:22"
+      },
+      {
         "path": "C:\\Users\\USER\\Documents",
         "name": "Documents",
         "is_dir": true,
@@ -440,6 +563,24 @@
       }
     ],
     "browser": [
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774452462,
+        "datetime": "2026-03-25 16:27"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "",
+        "query": "python tutorial google",
+        "site": "",
+        "tabs": 8,
+        "timestamp": 1774451991,
+        "datetime": "2026-03-25 16:19"
+      },
       {
         "intent": "BROWSER_OPEN_RESULT",
         "url": "https://www.aufeminin.com/societe/news-societe/football-3/coupe-du-monde-2026-sept-fois-plus-les-tarifs-exorbitants-des-billets-provoquent-la-colere-des-supporters-ils-passent-a-loffensive-2713268.html",
@@ -708,6 +849,22 @@
     ],
     "file": [
       {
+        "path": "E:\\docs\\contrat.pdf",
+        "name": "contrat.pdf",
+        "is_dir": false,
+        "parent": "E:\\docs",
+        "timestamp": 1774452274,
+        "datetime": "2026-03-25 16:24"
+      },
+      {
+        "path": "C:\\Program Files\\KMSpico\\temp\\tmpejzkchls.txt",
+        "name": "tmpejzkchls.txt",
+        "is_dir": false,
+        "parent": "C:\\Program Files\\KMSpico\\temp",
+        "timestamp": 1774452212,
+        "datetime": "2026-03-25 16:23"
+      },
+      {
         "path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
         "name": "comprendre 023.docx",
         "is_dir": false,
@@ -717,6 +874,46 @@
       }
     ],
     "audio": [
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 70,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774452560,
+        "datetime": "2026-03-25 16:29"
+      },
+      {
+        "intent": "AUDIO_MUTE",
+        "volume": null,
+        "track": "",
+        "action": "mute",
+        "timestamp": 1774452154,
+        "datetime": "2026-03-25 16:22"
+      },
+      {
+        "intent": "AUDIO_VOLUME_DOWN",
+        "volume": null,
+        "track": "",
+        "action": "volume_down",
+        "timestamp": 1774452099,
+        "datetime": "2026-03-25 16:21"
+      },
+      {
+        "intent": "AUDIO_VOLUME_UP",
+        "volume": null,
+        "track": "",
+        "action": "volume_up",
+        "timestamp": 1774452042,
+        "datetime": "2026-03-25 16:20"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 70,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774444832,
+        "datetime": "2026-03-25 14:20"
+      },
       {
         "intent": "AUDIO_VOLUME_SET",
         "volume": 30,
@@ -757,12 +954,22 @@
         "timestamp": 1774116060,
         "datetime": "2026-03-21 19:01"
       }
+    ],
+    "document": [
+      {
+        "path": "E:\\docs\\contrat.pdf",
+        "name": "contrat.pdf",
+        "action": "search_word",
+        "keyword": "permis",
+        "timestamp": 1774452282,
+        "datetime": "2026-03-25 16:24"
+      }
     ]
   },
   "stats": {
-    "session_count": 68,
-    "total_commands": 95
+    "session_count": 135,
+    "total_commands": 123
   },
-  "session_count": 68,
-  "_saved_at": "2026-03-24 23:52:42"
+  "session_count": 135,
+  "_saved_at": "2026-03-25 16:30:45"
 }

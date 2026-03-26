@@ -45,6 +45,7 @@ AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastus")
 # ─────────────────────────────────────────
 AZURE_FUNCTION_URL = os.getenv("AZURE_FUNCTION_URL", "")
 AZURE_FUNCTION_KEY = os.getenv("AZURE_FUNCTION_KEY", "")
+AZURE_STREAM_URL   = os.getenv("AZURE_STREAM_URL", "")
 
 # ─────────────────────────────────────────
 #  AZURE NOTIFICATION HUB

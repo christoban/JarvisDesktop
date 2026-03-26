@@ -108,6 +108,19 @@ class IntentExecutor:
             "FILE_INFO":           self._file_info,
             "FOLDER_LIST":         self._folder_list,
             "FOLDER_CREATE":       self._folder_create,
+            # ── Fichiers — nouveautés Semaine 7 ──────────────
+            "FILE_SEARCH_DATE":       self._file_search_date,
+            "FILE_SEARCH_SIZE":       self._file_search_size,
+            "FILE_SEARCH_ADVANCED":   self._file_search_advanced,
+            "FILE_ORGANIZE":          self._file_organize,
+            "FILE_BULK_RENAME":       self._file_bulk_rename,
+            "FILE_FIND_DUPLICATES":   self._file_find_duplicates,
+            "FILE_DELETE_DUPLICATES": self._file_delete_duplicates,
+            "FILE_CLEAN":             self._file_clean_empty,
+            # ── Fichiers — nouveautés Semaine 8 ──────────────
+            "FILE_CLASSIFY":           self._file_classify,
+            "FILE_PREPARE_APPLICATION":self._file_prepare_application,
+            "FILE_SYNC_DRIVE":         self._file_sync_drive,
             # ── Navigateur ────────────────────────────────────────────────────
             "BROWSER_OPEN":           self._browser_open,
             "BROWSER_CLOSE":          self._browser_close,
@@ -137,6 +150,11 @@ class IntentExecutor:
             "BROWSER_SWITCH_TAB":     self._browser_switch_tab,
             "BROWSER_FIND_AND_OPEN":  self._browser_find_and_open,
             "BROWSER_CONTEXT":        self._browser_context,
+            "BROWSER_SAVE_SESSION":   self._browser_save_session,
+            "BROWSER_CHECK_LOGIN":    self._browser_check_login,
+            "BROWSER_EXTRACT_SUMMARY":self._browser_extract_summary,
+            "BROWSER_COMPOSE_EMAIL":  self._browser_compose_email,
+            "BROWSER_MULTISTEP":      self._browser_multistep,
             # ── Audio ─────────────────────────────────────────────────────────
             "AUDIO_VOLUME_UP":   self._audio_volume_up,
             "AUDIO_VOLUME_DOWN": self._audio_volume_down,
@@ -551,6 +569,288 @@ class IntentExecutor:
             return self._err("Précise le chemin du dossier à créer.")
         return self.fm.create_folder(path)
 
+    def _file_search_date(self, p):
+        """
+        [S7] FILE_SEARCH_DATE — recherche par date de modification.
+        "trouve tous les PDF de cette semaine"
+        """
+        return self._normalize_file_search_result(
+            self.fm.search_by_date(
+                period     = p.get("period") or "week",
+                search_dirs= p.get("search_dirs"),
+                extension  = p.get("extension"),
+                date_from  = p.get("date_from"),
+                date_to    = p.get("date_to"),
+                max_results= int(p.get("max_results", 50)),
+            )
+        )
+
+    def _file_search_size(self, p):
+        """
+        [S7] FILE_SEARCH_SIZE — recherche par taille de fichier.
+        "fichiers de plus de 100 Mo dans Documents"
+        """
+        min_size = p.get("min_size") or p.get("size")
+        if min_size is None:
+            return self._err("Précise la taille cible (ex: min_size=100, unit='MB').")
+        try:
+            min_size = float(min_size)
+        except (TypeError, ValueError):
+            return self._err(f"Taille invalide : '{min_size}'.")
+
+        max_size = p.get("max_size")
+        if max_size is not None:
+            try:
+                max_size = float(max_size)
+            except (TypeError, ValueError):
+                max_size = None
+
+        return self._normalize_file_search_result(
+            self.fm.search_by_size(
+                min_size   = min_size,
+                max_size   = max_size,
+                operator   = p.get("operator", "gt"),
+                unit       = p.get("unit", "MB"),
+                search_dirs= p.get("search_dirs"),
+                extension  = p.get("extension"),
+                max_results= int(p.get("max_results", 50)),
+            )
+        )
+
+    def _file_search_advanced(self, p):
+        """
+        [S7] FILE_SEARCH_ADVANCED — recherche combinant nom + type + date + taille.
+        "PDF modifiés ce mois de plus de 500 Ko"
+        """
+        return self._normalize_file_search_result(
+            self.fm.search_advanced(
+                name       = p.get("name"),
+                extension  = p.get("extension"),
+                period     = p.get("period"),
+                date_from  = p.get("date_from"),
+                date_to    = p.get("date_to"),
+                min_size   = p.get("min_size"),
+                max_size   = p.get("max_size"),
+                size_unit  = p.get("size_unit", "MB"),
+                search_dirs= p.get("search_dirs"),
+                max_results= int(p.get("max_results", 50)),
+            )
+        )
+
+    def _file_organize(self, p):
+        """
+        [S7] FILE_ORGANIZE — organisation automatique d'un dossier.
+        "organise mon dossier téléchargements"
+        """
+        folder   = p.get("folder") or p.get("path") or "downloads"
+        # Sécurité : dry_run=True par défaut, sauf si explicitement demandé
+        dry_run  = p.get("dry_run", True)
+        # Groq peut envoyer "false" en string
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() not in ("false", "0", "non", "no")
+
+        return self.fm.organize_folder(
+            folder_path  = str(folder),
+            dry_run      = bool(dry_run),
+            create_other = bool(p.get("create_other", True)),
+            skip_subdirs = bool(p.get("skip_subdirs", True)),
+        )
+
+    def _file_bulk_rename(self, p):
+        """
+        [S7] FILE_BULK_RENAME — renommage en masse.
+        "renomme les fichiers en remplaçant 'rapport' par 'report'"
+        """
+        folder = p.get("folder") or p.get("path") or ""
+        if not folder:
+            return self._err("Précise le dossier contenant les fichiers à renommer.")
+
+        dry_run = p.get("dry_run", True)
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() not in ("false", "0", "non", "no")
+
+        # Valider les paramètres numériques
+        try:
+            number_start   = int(p.get("number_start", 1))
+            number_padding = int(p.get("number_padding", 2))
+        except (TypeError, ValueError):
+            number_start, number_padding = 1, 2
+
+        return self.fm.bulk_rename(
+            folder_path      = str(folder),
+            pattern          = p.get("pattern"),
+            replacement      = p.get("replacement", ""),
+            prefix           = p.get("prefix", ""),
+            suffix           = p.get("suffix", ""),
+            add_date         = bool(p.get("add_date", False)),
+            add_number       = bool(p.get("add_number", False)),
+            number_start     = number_start,
+            number_padding   = number_padding,
+            new_extension    = p.get("new_extension"),
+            extension_filter = p.get("extension_filter"),
+            dry_run          = bool(dry_run),
+        )
+
+    def _file_find_duplicates(self, p):
+        """
+        [S7] FILE_FIND_DUPLICATES — trouver les fichiers en double.
+        "trouve les doublons dans téléchargements"
+        """
+        min_size = p.get("min_size", 1)
+        try:
+            min_size = int(min_size)
+        except (TypeError, ValueError):
+            min_size = 1
+
+        return self.fm.find_duplicates(
+            search_dirs = p.get("search_dirs"),
+            extension   = p.get("extension"),
+            min_size    = min_size,
+            max_results = int(p.get("max_results", 100)),
+        )
+
+    def _file_delete_duplicates(self, p):
+        """
+        [S7] FILE_DELETE_DUPLICATES — supprimer les doublons.
+        "supprime les doublons en gardant le plus récent"
+        """
+        dry_run = p.get("dry_run", True)
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() not in ("false", "0", "non", "no")
+
+        strategy = p.get("strategy", "keep_newest")
+        valid_strategies = {"keep_newest", "keep_oldest", "keep_shortest_path"}
+        if strategy not in valid_strategies:
+            strategy = "keep_newest"
+
+        return self.fm.delete_duplicates(
+            search_dirs = p.get("search_dirs"),
+            extension   = p.get("extension"),
+            strategy    = strategy,
+            dry_run     = bool(dry_run),
+        )
+
+    def _file_clean_empty(self, p):
+        """
+        [S7] FILE_CLEAN — nettoyer les dossiers vides.
+        "nettoie les dossiers vides dans téléchargements"
+        """
+        folder  = p.get("folder") or p.get("path") or "downloads"
+        dry_run = p.get("dry_run", True)
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() not in ("false", "0", "non", "no")
+
+        return self.fm.clean_empty_folders(
+            folder_path = str(folder),
+            dry_run     = bool(dry_run),
+        )
+
+    def _file_classify(self, p):
+        """
+        [S8] FILE_CLASSIFY — classification intelligente de documents.
+        "classe mes documents"
+        """
+        move_files = p.get("move_files", False)
+        if isinstance(move_files, str):
+            move_files = move_files.lower() in ("true", "1", "oui", "yes")
+
+        return self.fm.classify_documents(
+            search_dirs = p.get("search_dirs"),
+            extension   = p.get("extension"),
+            max_results = int(p.get("max_results", 100)),
+            move_files  = bool(move_files),
+            target_root = p.get("target_root"),
+        )
+
+    def _file_prepare_application(self, p):
+        """
+        [S8] FILE_PREPARE_APPLICATION — workflow candidature (CV + lettre + ZIP).
+        "prépare mon dossier de candidature"
+        """
+        dry_run = p.get("dry_run", True)
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() not in ("false", "0", "non", "no")
+
+        include_categories = p.get("include_categories")
+        if include_categories and not isinstance(include_categories, list):
+            include_categories = None
+
+        if not bool(dry_run) and not bool(p.get("confirmed", False)):
+            safe_params = {
+                "search_dirs": p.get("search_dirs"),
+                "output_dir": p.get("output_dir"),
+                "package_name": p.get("package_name", "dossier_candidature"),
+                "include_categories": include_categories,
+                "dry_run": False,
+                "confirmed": True,
+            }
+            return self._ok(
+                "Confirmation requise: je vais créer le dossier candidature et générer un ZIP. Confirmer ? (oui/non)",
+                {
+                    "awaiting_choice": True,
+                    "choices": ["oui", "non"],
+                    "pending_intent": "FILE_PREPARE_APPLICATION",
+                    "pending_params": {
+                        "__confirm_action__": {
+                            "intent": "FILE_PREPARE_APPLICATION",
+                            "params": safe_params,
+                        }
+                    },
+                },
+            )
+
+        return self.fm.prepare_application_package(
+            search_dirs        = p.get("search_dirs"),
+            output_dir         = p.get("output_dir"),
+            package_name       = p.get("package_name", "dossier_candidature"),
+            include_categories = include_categories,
+            dry_run            = bool(dry_run),
+        )
+
+    def _file_sync_drive(self, p):
+        """
+        [S8] FILE_SYNC_DRIVE — synchronisation basique vers Google Drive desktop.
+        "synchronise mon dossier documents avec google drive"
+        """
+        source = p.get("source") or p.get("folder") or p.get("path") or "documents"
+        dry_run = p.get("dry_run", True)
+        if isinstance(dry_run, str):
+            dry_run = dry_run.lower() not in ("false", "0", "non", "no")
+
+        mode = str(p.get("mode", "copy")).lower().strip()
+        if mode not in {"copy", "mirror"}:
+            mode = "copy"
+
+        if mode == "mirror" and not bool(dry_run) and not bool(p.get("confirmed", False)):
+            safe_params = {
+                "source": str(source),
+                "drive_folder": p.get("drive_folder"),
+                "mode": "mirror",
+                "dry_run": False,
+                "confirmed": True,
+            }
+            return self._ok(
+                "Confirmation requise: mode mirror peut supprimer des fichiers côté cible Drive. Continuer ? (oui/non)",
+                {
+                    "awaiting_choice": True,
+                    "choices": ["oui", "non"],
+                    "pending_intent": "FILE_SYNC_DRIVE",
+                    "pending_params": {
+                        "__confirm_action__": {
+                            "intent": "FILE_SYNC_DRIVE",
+                            "params": safe_params,
+                        }
+                    },
+                },
+            )
+
+        return self.fm.sync_to_google_drive(
+            source       = str(source),
+            drive_folder = p.get("drive_folder"),
+            mode         = mode,
+            dry_run      = bool(dry_run),
+        )
+
     # ══════════════════════════════════════════════════════════════════════════
     #  NAVIGATEUR — CORRIGÉ (Correction 1)
     #
@@ -714,6 +1014,49 @@ class IntentExecutor:
 
     def _browser_context(self, p):
         return self.bc.get_browser_context()
+
+    def _browser_save_session(self, p):
+        """Sauvegarde les cookies/session d'un site."""
+        site = p.get("site", "site")
+        if not self.bc._session:
+            return {"success": False, "message": "Navigateur non initialisé."}
+        tabs = self.bc._session.get_tabs()
+        if not tabs:
+            return {"success": False, "message": "Aucun onglet ouvert."}
+        return self.bc._auto.auth.save_cookies(tabs[0], site)
+
+    def _browser_check_login(self, p):
+        """Vérifie si on est connecté à un site."""
+        site = p.get("site", "site")
+        if not self.bc._session:
+            return {"success": False, "message": "Navigateur non initialisé."}
+        tabs = self.bc._session.get_tabs()
+        if not tabs:
+            return {"success": False, "message": "Aucun onglet ouvert."}
+        return self.bc._auto.auth.check_login_state(tabs[0], site)
+
+    def _browser_extract_summary(self, p):
+        """Résumé structuré du contenu de la page."""
+        if not self.bc._session:
+            return {"success": False, "message": "Navigateur non initialisé."}
+        tabs = self.bc._session.get_tabs()
+        if not tabs:
+            return {"success": False, "message": "Aucun onglet ouvert."}
+        return self.bc._auto.content.extract_structured_summary(tabs[0])
+
+    def _browser_compose_email(self, p):
+        """Composer et envoyer un email."""
+        to = p.get("to", "")
+        subject = p.get("subject", "")
+        body = p.get("body", "")
+        return self.bc._auto.compose_email(to=to, subject=subject, body=body)
+
+    def _browser_multistep(self, p):
+        """Exécuter plusieurs commandes en séquence."""
+        steps = p.get("steps", [])
+        if not steps:
+            return {"success": False, "message": "Aucune étape fournie."}
+        return self.bc.multi_step_task(steps)
 
     # ══════════════════════════════════════════════════════════════════════════
     #  AUDIO

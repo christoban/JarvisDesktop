@@ -653,6 +653,10 @@ class BrowserControl:
         """Exécute une séquence de commandes navigateur."""
         return self._auto.multi_step_task(steps)
 
+    def dispatch(self, natural_command: str) -> dict:
+        """Exécute une commande navigateur unique en langage naturel."""
+        return self._auto.execute_natural_command(natural_command)
+
     def get_browser_context(self) -> dict:
         """Retourne l'état actuel du navigateur."""
         return self._auto.get_browser_context()

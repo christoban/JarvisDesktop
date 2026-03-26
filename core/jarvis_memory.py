@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 from config.logger import get_logger
+from core.vector_db import VectorDB
 
 logger = get_logger(__name__)
 
@@ -78,6 +79,11 @@ class JarvisMemory:
             "session_count": 0,
         }
         MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Initialisation mémoire vectorielle (RAG)
+        vector_path = MEMORY_FILE.parent / "vector_store"
+        self.vector_db = VectorDB(vector_path)
+
         self._load()
         self._mark_session_start()
         self._cleanup_old_events()
@@ -136,6 +142,10 @@ class JarvisMemory:
           memory.remember_fact("user_name", "Christian")
           memory.remember_fact("work_project", "JarvisWindows")
           memory.remember_fact("preferred_language", "français")
+          
+          # En plus du JSON, on injecte dans la base vectorielle pour recherche sémantique
+          self.vector_db.add_memory(f"Fait utilisateur : {key} est {value}", {"type": "fact", "key": key})
+
         """
         if not key or value is None:
             return

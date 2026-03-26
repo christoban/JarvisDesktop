@@ -8,6 +8,7 @@ Groupes :
   G3. BrowserControl — lancement Chrome, onglets, recherche (mock CDP)
   G4. PageActions — extraction résultats, formulaires, résumé (mock)
   G5. Non-régression — semaines précédentes
+    G6. File + Browser combinés (Semaine 8)
 
 Usage :
     cd JarvisDesktop
@@ -329,6 +330,69 @@ def _test_g5_non_regression():
 
 
 # ════════════════════════════════════════════════════════════════
+#  G6 — File + Browser combinés (Semaine 8)
+# ════════════════════════════════════════════════════════════════
+
+def _test_g6_file_browser_combined():
+    _sep("GROUPE 6 — File + Browser combinés (Semaine 8)")
+
+    from core.command_parser import CommandParser
+    from core.intent_executor import IntentExecutor
+
+    parser = CommandParser()
+    parser.ai_available = False
+    parser.client = None
+
+    parse_cases = [
+        ("prépare mon dossier de candidature", "FILE_PREPARE_APPLICATION"),
+        ("classifie mes documents", "FILE_CLASSIFY"),
+        ("synchronise mes documents avec google drive", "FILE_SYNC_DRIVE"),
+        ("trouve les pdf de cette semaine", "FILE_SEARCH_DATE"),
+        ("cherche les fichiers de plus de 100 mo", "FILE_SEARCH_SIZE"),
+        ("organise mon dossier téléchargements", "FILE_ORGANIZE"),
+        ("trouve les doublons", "FILE_FIND_DUPLICATES"),
+        ("ouvre youtube", "BROWSER_OPEN"),
+    ]
+
+    global PASS, FAIL
+    for cmd, expected in parse_cases:
+        intent = parser.parse(cmd).get("intent", "UNKNOWN")
+        ok = intent == expected
+        if ok:
+            PASS += 1
+        else:
+            FAIL += 1
+        icon = "✅" if ok else "❌"
+        note = f"  ⚠ attendu {expected}" if not ok else ""
+        print(f"  {icon} parse(\"{cmd}\") → {intent}{note}")
+
+    ex = IntentExecutor()
+    required_handlers = [
+        "FILE_SEARCH_DATE",
+        "FILE_SEARCH_SIZE",
+        "FILE_SEARCH_ADVANCED",
+        "FILE_ORGANIZE",
+        "FILE_BULK_RENAME",
+        "FILE_FIND_DUPLICATES",
+        "FILE_DELETE_DUPLICATES",
+        "FILE_CLEAN",
+        "FILE_CLASSIFY",
+        "FILE_PREPARE_APPLICATION",
+        "FILE_SYNC_DRIVE",
+        "BROWSER_OPEN",
+        "BROWSER_SEARCH",
+    ]
+    for intent in required_handlers:
+        has = intent in ex._handlers
+        if has:
+            PASS += 1
+        else:
+            FAIL += 1
+        print(f"  {'✅' if has else '❌'} Handler {intent} {'présent' if has else 'MANQUANT'}")
+    print()
+
+
+# ════════════════════════════════════════════════════════════════
 #  PYTEST WRAPPERS
 # ════════════════════════════════════════════════════════════════
 
@@ -403,6 +467,53 @@ def test_g5_non_regression():
     assert not failed, "\n" + "\n".join(failed)
 
 
+def test_g6_file_browser_combined():
+    """pytest — G6 file + browser combinés (Semaine 8)"""
+    from core.command_parser import CommandParser
+    from core.intent_executor import IntentExecutor
+
+    p = CommandParser()
+    p.ai_available = False
+    p.client = None
+
+    parse_cases = [
+        ("prépare mon dossier de candidature", "FILE_PREPARE_APPLICATION"),
+        ("classifie mes documents", "FILE_CLASSIFY"),
+        ("synchronise mes documents avec google drive", "FILE_SYNC_DRIVE"),
+        ("trouve les pdf de cette semaine", "FILE_SEARCH_DATE"),
+        ("cherche les fichiers de plus de 100 mo", "FILE_SEARCH_SIZE"),
+        ("organise mon dossier téléchargements", "FILE_ORGANIZE"),
+        ("trouve les doublons", "FILE_FIND_DUPLICATES"),
+        ("ouvre youtube", "BROWSER_OPEN"),
+    ]
+    failed = []
+    for cmd, expected in parse_cases:
+        intent = p.parse(cmd).get("intent", "UNKNOWN")
+        if intent != expected:
+            failed.append(f"parse('{cmd}') → {intent} (attendu {expected})")
+
+    ex = IntentExecutor()
+    for intent in [
+        "FILE_SEARCH_DATE",
+        "FILE_SEARCH_SIZE",
+        "FILE_SEARCH_ADVANCED",
+        "FILE_ORGANIZE",
+        "FILE_BULK_RENAME",
+        "FILE_FIND_DUPLICATES",
+        "FILE_DELETE_DUPLICATES",
+        "FILE_CLEAN",
+        "FILE_CLASSIFY",
+        "FILE_PREPARE_APPLICATION",
+        "FILE_SYNC_DRIVE",
+        "BROWSER_OPEN",
+        "BROWSER_SEARCH",
+    ]:
+        if intent not in ex._handlers:
+            failed.append(f"Handler manquant: {intent}")
+
+    assert not failed, "\n" + "\n".join(failed)
+
+
 # ════════════════════════════════════════════════════════════════
 #  MAIN
 # ════════════════════════════════════════════════════════════════
@@ -417,6 +528,7 @@ def main():
     _test_g3_browser_control()
     _test_g4_page_actions()
     _test_g5_non_regression()
+    _test_g6_file_browser_combined()
 
     total = PASS + FAIL
     print("═" * 60)

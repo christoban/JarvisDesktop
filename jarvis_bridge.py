@@ -37,6 +37,8 @@ except ImportError:
     ThreadingHTTPServer = HTTPServer  # Python < 3.7 fallback
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from modules.screen_share.capture import get_capture, reset_capture, ScreenCapture
+
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -75,6 +77,14 @@ try:
     _AZURE_SPEECH_SDK = True
 except ImportError:
     _AZURE_SPEECH_SDK = False
+
+_AZURE_STREAM_URL = ""   # ex: "https://jarvis-func.azurewebsites.net/api/stream"
+try:
+    from config.settings import AZURE_STREAM_URL as _AZURE_STREAM_URL_CFG
+    _AZURE_STREAM_URL = _AZURE_STREAM_URL_CFG
+except ImportError:
+    pass
+_screen_pusher_lock   = threading.Lock()
 
 def _resolve_ffmpeg_exe() -> str:
     """
@@ -178,6 +188,10 @@ _results:    dict        = {}
 _store_lock  = threading.Lock()
 _notifications: list     = []
 _notifications_lock       = threading.Lock()
+
+# ── Screen Share ─────────────────────────────────────────────────────────
+_screen_pusher_thread: threading.Thread = None
+_screen_pusher_stop   = threading.Event()
 
 _auth_singleton = None
 _perms_singleton = None
@@ -597,6 +611,235 @@ def _execute(cmd_id: str, command: str, speak: bool = False, device_id: str = "u
             data={"command": command},
         ))
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  FONCTIONS SCREEN — à ajouter dans jarvis_bridge.py
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+def _screen_start(params: dict) -> dict:
+    """
+    Démarre la capture d'écran.
+    Params (tous optionnels) : fps, quality, scale, monitor, push_to_azure
+    """
+    from modules.screen_share.capture import get_capture, reset_capture
+ 
+    # Récupérer les paramètres
+    fps     = int(params.get("fps", 10))
+    quality = int(params.get("quality", 60))
+    scale   = float(params.get("scale", 1.0))
+    monitor = int(params.get("monitor", 1))
+ 
+    # Réinitialiser si les paramètres changent
+    cap = get_capture()
+    if cap.fps != fps or cap.quality != quality or cap.scale != scale or cap.monitor_idx != monitor:
+        reset_capture()
+        from modules.screen_share.capture import ScreenCapture
+        import modules.screen_share.capture as _cap_module
+        with _cap_module._capture_lock:
+            _cap_module._capture_instance = ScreenCapture(
+                fps=fps, quality=quality, scale=scale, monitor=monitor,
+                detect_changes=True, adaptive_quality=True,
+            )
+        cap = _cap_module._capture_instance
+ 
+    result = cap.start()
+ 
+    # Démarrer le pusher Azure si configuré
+    push_azure = bool(params.get("push_to_azure", False)) and bool(_AZURE_STREAM_URL)
+    if push_azure and result["success"]:
+        _start_azure_pusher(cap)
+ 
+    return result
+ 
+ 
+def _screen_stop() -> dict:
+    """Arrête la capture et le pusher Azure si actif."""
+    from modules.screen_share.capture import get_capture
+    cap    = get_capture()
+    result = cap.stop()
+    _stop_azure_pusher()
+    return result
+ 
+ 
+def _screen_set_config(params: dict) -> dict:
+    """Applique la configuration à la capture en cours."""
+    from modules.screen_share.capture import get_capture
+    cap = get_capture()
+    changes = []
+ 
+    if "fps" in params:
+        r = cap.set_fps(int(params["fps"]))
+        changes.append(r["message"])
+    if "quality" in params:
+        r = cap.set_quality(int(params["quality"]))
+        changes.append(r["message"])
+    if "scale" in params:
+        cap.scale = max(0.1, min(1.0, float(params["scale"])))
+        changes.append(f"Scale → {cap.scale}")
+    if "monitor" in params:
+        r = cap.set_monitor(int(params["monitor"]))
+        changes.append(r["message"])
+ 
+    if not changes:
+        return {"success": False, "message": "Aucun paramètre valide fourni."}
+ 
+    return {
+        "success": True,
+        "message": " | ".join(changes),
+        "data":    cap.get_stats(),
+    }
+ 
+ 
+def _screen_get_frame(handler, cap, since_id: int = -1, fmt: str = "json") -> None:
+    """
+    Retourne le dernier frame capturé.
+    Gère deux formats : JSON (base64) ou JPEG brut.
+    """
+    frame = cap.get_latest_frame()
+ 
+    if frame is None:
+        handler._json({"success": False, "message": "Aucun frame disponible. Démarre la capture avec POST /api/stream/start."})
+        return
+ 
+    # Polling différentiel : le mobile a déjà ce frame
+    if since_id >= 0 and frame.frame_id <= since_id:
+        handler._json({
+            "success":   True,
+            "status":    "same_frame",
+            "frame_id":  frame.frame_id,
+            "age_ms":    int((time.time() - frame.timestamp) * 1000),
+        })
+        return
+ 
+    age_ms = int((time.time() - frame.timestamp) * 1000)
+ 
+    # Format JPEG brut — le mobile affiche directement via uri={jpeg_uri}
+    if fmt == "jpeg":
+        jpeg = frame.jpeg_bytes
+        handler.send_response(200)
+        handler.send_header("Content-Type",                "image/jpeg")
+        handler.send_header("Content-Length",              str(len(jpeg)))
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        handler.send_header("X-Frame-Id",                  str(frame.frame_id))
+        handler.send_header("X-Frame-Age-Ms",              str(age_ms))
+        handler.send_header("X-Fps-Real",                  str(round(cap._fps_real, 1)))
+        handler.send_header("Cache-Control",               "no-store")
+        handler.end_headers()
+        handler.wfile.write(jpeg)
+        return
+ 
+    # Format JSON — compatible avec l'app React Native
+    handler._json({
+        "success":   True,
+        "status":    "ok",
+        "frame_id":  frame.frame_id,
+        "frame_b64": base64.b64encode(frame.jpeg_bytes).decode(),
+        "width":     frame.width,
+        "height":    frame.height,
+        "size_kb":   round(frame.size_bytes / 1024, 1),
+        "age_ms":    age_ms,
+        "changed":   frame.changed,
+        "stats":     cap.get_stats(),
+    })
+ 
+ 
+# ── Azure Pusher (optionnel) ──────────────────────────────────────────────────
+ 
+def _start_azure_pusher(cap):
+    """
+    Lance un thread qui pousse les frames vers Azure Function /stream/push.
+    Utilisé quand le mobile est hors du réseau local.
+    """
+    global _screen_pusher_thread, _screen_pusher_stop
+ 
+    with _screen_pusher_lock:
+        if _screen_pusher_thread and _screen_pusher_thread.is_alive():
+            return  # Déjà en cours
+ 
+        _screen_pusher_stop.clear()
+        _screen_pusher_thread = threading.Thread(
+            target=_azure_push_loop,
+            args=(cap,),
+            name="jarvis-azure-pusher",
+            daemon=True,
+        )
+        _screen_pusher_thread.start()
+        print("  📡 Azure pusher démarré")
+ 
+ 
+def _stop_azure_pusher():
+    global _screen_pusher_thread
+    _screen_pusher_stop.set()
+    with _screen_pusher_lock:
+        if _screen_pusher_thread and _screen_pusher_thread.is_alive():
+            _screen_pusher_thread.join(timeout=2.0)
+        _screen_pusher_thread = None
+ 
+ 
+def _azure_push_loop(cap):
+    """
+    Boucle qui récupère les frames et les pousse vers Azure.
+    S'arrête automatiquement si la capture s'arrête ou si le stop event est set.
+    """
+    import urllib.request
+    import urllib.error
+ 
+    try:
+        from config.settings import SECRET_TOKEN
+    except ImportError:
+        SECRET_TOKEN = "changeme"
+ 
+    push_url  = f"{_AZURE_STREAM_URL.rstrip('/')}/push"
+    last_id   = -1
+    errors    = 0
+    MAX_ERRORS = 5
+ 
+    print(f"  📡 Push Azure → {push_url}")
+ 
+    for frame in cap.iter_frames(timeout=3600, only_changes=True):
+        if _screen_pusher_stop.is_set():
+            break
+ 
+        if frame.frame_id == last_id:
+            continue
+ 
+        last_id = frame.frame_id
+ 
+        payload = json.dumps({
+            "frame_b64":  base64.b64encode(frame.jpeg_bytes).decode(),
+            "frame_id":   frame.frame_id,
+            "width":      frame.width,
+            "height":     frame.height,
+            "size_bytes": frame.size_bytes,
+            "fps_real":   cap._fps_real,
+            "quality":    cap.quality,
+        }).encode()
+ 
+        try:
+            req = urllib.request.Request(
+                push_url,
+                data=payload,
+                method="POST",
+                headers={
+                    "Content-Type":  "application/json",
+                    "X-Jarvis-Token": SECRET_TOKEN,
+                }
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                resp.read()
+            errors = 0  # Reset sur succès
+ 
+        except urllib.error.HTTPError as e:
+            print(f"  ❌ Push Azure HTTP {e.code} : {e.reason}")
+            errors += 1
+        except Exception as e:
+            print(f"  ❌ Push Azure erreur : {e}")
+            errors += 1
+ 
+        if errors >= MAX_ERRORS:
+            print(f"  ⛔ Azure pusher arrêté après {MAX_ERRORS} erreurs consécutives.")
+            break
+ 
+    print("  📡 Azure pusher arrêté")
 
 # ── Handler HTTP ──────────────────────────────────────────────────────────────
 class BridgeHandler(BaseHTTPRequestHandler):
@@ -643,7 +886,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin",  "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers",
-                         "Content-Type, X-Jarvis-Token, X-Device-Id, X-Timestamp, X-Audio-Format")
+                     "Content-Type, X-Jarvis-Token, X-Device-Id, "
+                     "X-Timestamp, X-Audio-Format, X-Since-Frame-Id")
         self.end_headers()
 
     # ── GET ───────────────────────────────────────────────────────────────────
@@ -728,6 +972,45 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if entry is None:
                 return self._json({"status": "pending", "command_id": cmd_id}, 404)
             return self._json({"status": "done", "command_id": cmd_id, **entry})
+        
+        # ──────────────────────────────────────────────────────────────────────
+        # SCREEN SHARE — GET endpoints
+        # ──────────────────────────────────────────────────────────────────────
+        if path == "/api/stream/status":
+            cap = get_capture()
+            return self._json({"success": True, "data": cap.get_stats()})
+    
+        if path == "/api/stream/frame":
+            auth_result = self._auth(method="GET", path=path)
+            if not auth_result["ok"]:
+                return self._json({"error": "Unauthorized"}, 401)
+            cap = get_capture()
+            since_id = -1
+            try:
+                since_id = int(query.get("since_id", [-1])[0])
+            except Exception:
+                pass
+            fmt = (query.get("format", ["json"])[0]).lower()
+            return _screen_get_frame(self, cap, since_id, fmt)
+ 
+        if path == "/api/stream/monitors":
+            return self._json(ScreenCapture.list_monitors())
+    
+        if path == "/api/stream/config":
+            auth_result = self._auth(method="GET", path=path)
+            if not auth_result["ok"]:
+                return self._json({"error": "Unauthorized"}, 401)
+            cap = get_capture()
+            return self._json({
+                "success": True,
+                "data": {
+                    "fps":     cap.fps,
+                    "quality": cap.quality,
+                    "scale":   cap.scale,
+                    "monitor": cap.monitor_idx,
+                    "running": cap._running,
+                }
+            })
 
         return self._json({"error": f"Route inconnue: {path}"}, 404)
 
@@ -905,6 +1188,35 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     "total_ms":   t_whisper + t_exec,
                 },
             })
+        
+        # ──────────────────────────────────────────────────────────────────────
+        # SCREEN SHARE — POST endpoints
+        # ──────────────────────────────────────────────────────────────────────
+        if path == "/api/stream/start":
+            auth_result = self._auth(body=body, method="POST", path=path)
+            if not auth_result["ok"]:
+                return self._json({"error": "Unauthorized"}, 401)
+            try:
+                data = json.loads(body or b"{}")
+            except Exception:
+                data = {}
+            return _screen_start(data)
+    
+        if path == "/api/stream/stop":
+            auth_result = self._auth(body=body, method="POST", path=path)
+            if not auth_result["ok"]:
+                return self._json({"error": "Unauthorized"}, 401)
+            return _screen_stop()
+    
+        if path == "/api/stream/config":
+            auth_result = self._auth(body=body, method="POST", path=path)
+            if not auth_result["ok"]:
+                return self._json({"error": "Unauthorized"}, 401)
+            try:
+                data = json.loads(body or b"{}")
+            except Exception:
+                return self._json({"error": "JSON invalide"}, 400)
+            return _screen_set_config(data)
 
         return self._json({"error": f"Route inconnue: {path}"}, 404)
 
@@ -928,11 +1240,19 @@ if __name__ == "__main__":
     print("    POST /api/voice    ← audio (Azure Speech + TTS)")
     print("    POST /api/notify   ← push notification vers mobile")
     print("    POST /api/confirm  ← confirmer/refuser action dangereuse")
+    print("    POST /api/stream/start     ← démarrer capture")
+    print("    POST /api/stream/stop      ← arrêter capture")
+    print("    POST /api/stream/config    ← changer FPS/qualité")
     print("    GET  /api/result/<id>")
     print("    GET  /api/notifications")
     print("    GET  /api/pending")
     print("    GET  /api/devices")
     print("    GET  /api/health")
+    print("    GET  /api/stream/status    ← statut capture")
+    print("    GET  /api/stream/frame     ← dernier frame (JSON ou JPEG)")
+    print("    GET  /api/stream/monitors  ← liste moniteurs")
+    print("    GET  /api/stream/config    ← config actuelle")
+    
     print("=" * 64 + "\n")
 
     # Pré-charger

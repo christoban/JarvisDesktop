@@ -11,7 +11,10 @@ Mémoire conversationnelle :
 
 import time
 import re
+import psutil
+import pygetwindow as gw
 from pathlib import Path
+import json
 
 from config.logger import get_logger
 from core.jarvis_memory import JarvisMemory
@@ -292,6 +295,10 @@ class Agent:
             history_for_groq = [
                 {"role": "system", "content": f"MÉMOIRE JARVIS:\n{full_summary}", "memory": full_summary}
             ] + history_for_groq
+        
+        # Get sensory context
+        sensory_context = self._get_sensory_context()
+        history_for_groq.append({"role": "system", "content": f"Etat actuel du PC:\n{sensory_context}"})
 
         parsed       = self.parser.parse_with_context(raw, history_for_groq)
         intent       = parsed.get("intent",     "UNKNOWN")
@@ -365,7 +372,7 @@ class Agent:
         result = dict(result) if result else {"success": False, "message": jarvis_message, "data": {}}
         result["message"] = jarvis_message
         
-        # [FIX MUSIC_PLAYLIST_LIST] - Append display data if available
+
         # Some intents (like MUSIC_PLAYLIST_LIST) have formatted display tables
         # that should be shown to the user alongside the natural message
         if result and isinstance(result, dict):
@@ -446,6 +453,30 @@ class Agent:
         choices      = pending.get("choices", [])
         original_cmd = pending.get("raw_command", "")
         r = reply.lower().strip()
+
+        # ── Confirmation explicite oui/non pour actions sensibles ───────────
+        confirm_payload = params.get("__confirm_action__") if isinstance(params, dict) else None
+        if isinstance(confirm_payload, dict):
+            yes_words = {"oui", "ouais", "ok", "okay", "go", "vas-y", "fais-le", "fais le", "confirme", "yes", "y"}
+            no_words = {"non", "no", "n", "annule", "stop", "laisse", "ne fais pas", "ne le fais pas", "cancel"}
+
+            if r in yes_words or any(f" {w} " in f" {r} " for w in yes_words):
+                yes_intent = confirm_payload.get("intent") or intent
+                yes_params = dict(confirm_payload.get("params") or {})
+                return self.executor.execute(yes_intent, yes_params, raw_command=original_cmd or reply, agent=self)
+
+            if r in no_words or any(f" {w} " in f" {r} " for w in no_words):
+                return {
+                    "success": True,
+                    "message": "D'accord, action annulée.",
+                    "data": {"cancelled": True, "awaiting_choice": False},
+                }
+
+            return {
+                "success": False,
+                "message": "Réponds simplement par 'oui' pour confirmer ou 'non' pour annuler.",
+                "data": {"awaiting_choice": True, "choices": choices},
+            }
 
         if intent == "__CLARIFY_INTENT__":
             clarified = self._resolve_intent_clarification(reply, pending.get("choices", []), original_cmd)
@@ -556,7 +587,6 @@ class Agent:
         if parsed.get("intent") not in ("UNKNOWN", ""):
             result = self.executor.execute(parsed["intent"], parsed["params"], raw_command=full_cmd, agent=self)
             return result
-
         return None
 
     def _resolve_intent_clarification(self, reply: str, choices: list, original_cmd: str) -> dict | None:
@@ -1841,6 +1871,7 @@ class Agent:
         if match:
             val, unit = int(match.group(1)), match.group(2)
             return val * 60 if "min" in unit else val
+
         return default
 
     @staticmethod

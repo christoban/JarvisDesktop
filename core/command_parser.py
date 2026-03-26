@@ -31,6 +31,7 @@ CORRECTION 3 (audit semaines 1-5) :
 import json
 import re
 import time
+from typing import Optional
 import unicodedata
 from config.logger import get_logger
 from config.settings import (
@@ -109,6 +110,17 @@ INTENTS = {
     "FILE_INFO":           {"desc": "Informations sur un fichier",           "params": {"path": "str"}},
     "FOLDER_LIST":         {"desc": "Lister le contenu d'un dossier",        "params": {"path": "str"}},
     "FOLDER_CREATE":       {"desc": "Créer un dossier",                      "params": {"path": "str"}},
+    "FILE_SEARCH_DATE":    {"desc": "Rechercher des fichiers par date",      "params": {"period": "str optionnel", "search_dirs": "list optionnel", "extension": "str optionnel"}},
+    "FILE_SEARCH_SIZE":    {"desc": "Rechercher des fichiers par taille",    "params": {"min_size": "float", "max_size": "float optionnel", "unit": "str optionnel", "search_dirs": "list optionnel", "extension": "str optionnel"}},
+    "FILE_SEARCH_ADVANCED": {"desc": "Recherche fichiers multi-critères",    "params": {"name": "str optionnel", "extension": "str optionnel", "period": "str optionnel", "min_size": "float optionnel", "max_size": "float optionnel", "size_unit": "str optionnel", "search_dirs": "list optionnel"}},
+    "FILE_ORGANIZE":       {"desc": "Organiser automatiquement un dossier",  "params": {"folder": "str optionnel", "dry_run": "bool optionnel"}},
+    "FILE_BULK_RENAME":    {"desc": "Renommer des fichiers en masse",        "params": {"folder": "str", "pattern": "str optionnel", "replacement": "str optionnel", "prefix": "str optionnel", "suffix": "str optionnel", "dry_run": "bool optionnel"}},
+    "FILE_FIND_DUPLICATES": {"desc": "Trouver les doublons",                 "params": {"search_dirs": "list optionnel", "extension": "str optionnel", "min_size": "int optionnel"}},
+    "FILE_DELETE_DUPLICATES": {"desc": "Supprimer les doublons",             "params": {"search_dirs": "list optionnel", "strategy": "str optionnel", "dry_run": "bool optionnel"}},
+    "FILE_CLEAN":          {"desc": "Nettoyer les dossiers vides",           "params": {"folder": "str optionnel", "dry_run": "bool optionnel"}},
+    "FILE_CLASSIFY":       {"desc": "Classer intelligemment des documents",  "params": {"search_dirs": "list optionnel", "move_files": "bool optionnel"}},
+    "FILE_PREPARE_APPLICATION": {"desc": "Préparer un dossier de candidature (CV, lettre, ZIP)", "params": {"search_dirs": "list optionnel", "output_dir": "str optionnel", "dry_run": "bool optionnel"}},
+    "FILE_SYNC_DRIVE":     {"desc": "Synchroniser un dossier vers Google Drive", "params": {"source": "str", "drive_folder": "str optionnel", "mode": "copy|mirror", "dry_run": "bool optionnel"}},
     "WINDOW_CLOSE":        {"desc": "Fermer une fenêtre ouverte",            "params": {"query": "str"}},
 
     # ── Navigateur ────────────────────────────────────────────────────────────
@@ -140,6 +152,11 @@ INTENTS = {
     "BROWSER_SWITCH_TAB":     {"desc": "Basculer sur un onglet",             "params": {"index": "int optionnel"}},
     "BROWSER_FIND_AND_OPEN":  {"desc": "Trouver le meilleur résultat et l'ouvrir", "params": {"query": "str"}},
     "BROWSER_CONTEXT":        {"desc": "État actuel du navigateur",          "params": {}},
+    "BROWSER_SAVE_SESSION":   {"desc": "Sauvegarder les cookies/session d'un site", "params": {"site": "str"}},
+    "BROWSER_CHECK_LOGIN":    {"desc": "Vérifier l'état de connexion à un site",    "params": {"site": "str"}},
+    "BROWSER_EXTRACT_SUMMARY":{"desc": "Résumé structuré du contenu de la page",    "params": {}},
+    "BROWSER_COMPOSE_EMAIL":  {"desc": "Composer et envoyer un email",              "params": {"to": "str optionnel", "subject": "str optionnel", "body": "str optionnel"}},
+    "BROWSER_MULTISTEP":      {"desc": "Exécuter plusieurs commandes en séquence",  "params": {"steps": "list[str]"}},
 
     # ── Audio ─────────────────────────────────────────────────────────────────
     "AUDIO_VOLUME_UP":   {"desc": "Monter le volume",                        "params": {"step": "int"}},
@@ -237,6 +254,11 @@ FEW_SHOT_EXAMPLES = [
     ("éteins l\'ordi dans 5 minutes",    '{"intent":"SYSTEM_SHUTDOWN","params":{"delay_seconds":300},"confidence":0.99,"response_message":"J\'éteins le PC dans 5 minutes."}'),
     ("coupe le son",                      '{"intent":"AUDIO_MUTE","params":{},"confidence":0.99,"response_message":"Son coupé."}'),
     ("ouvre mes documents",               '{"intent":"FOLDER_LIST","params":{"path":"Documents"},"confidence":0.97,"response_message":"J\'ouvre ton dossier Documents."}'),
+    ("classifie mes documents",           '{"intent":"FILE_CLASSIFY","params":{"move_files":false,"max_results":120},"confidence":0.98,"response_message":"Je lance une classification intelligente de tes documents en mode aperçu."}'),
+    ("prépare mon dossier de candidature", '{"intent":"FILE_PREPARE_APPLICATION","params":{"dry_run":true,"package_name":"dossier_candidature"},"confidence":0.99,"response_message":"Je prépare un aperçu de ton dossier de candidature avant création du ZIP."}'),
+    ("crée le zip de ma candidature",     '{"intent":"FILE_PREPARE_APPLICATION","params":{"dry_run":false,"package_name":"dossier_candidature"},"confidence":0.97,"response_message":"Je vais créer le ZIP de candidature après confirmation."}'),
+    ("synchronise mes documents avec google drive", '{"intent":"FILE_SYNC_DRIVE","params":{"source":"documents","mode":"copy","dry_run":true},"confidence":0.98,"response_message":"Je prépare un aperçu de la synchronisation vers Google Drive."}'),
+    ("sync google drive en mode mirror maintenant", '{"intent":"FILE_SYNC_DRIVE","params":{"source":"documents","mode":"mirror","dry_run":false},"confidence":0.97,"response_message":"Je vais lancer une synchro mirror après confirmation."}'),
     ("va sur youtube et cherche Python tutorial", '{"intent":"BROWSER_GO_TO_SITE","params":{"site":"youtube","query":"Python tutorial"},"confidence":0.99,"response_message":"Je cherche Python tutorial sur YouTube."}'),
     ("referme là",                        '{"intent":"WINDOW_CLOSE","params":{"query":""},"confidence":0.97,"response_message":"Je ferme la fenêtre."}'),
     ("joue la playlist chill",            '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"chill"},"confidence":0.98,"response_message":"Je lance la playlist chill."}'),
@@ -468,14 +490,20 @@ class CommandParser:
         messages = [{"role": "system", "content": self._build_system_prompt(memory_summary)}]
 
         # Few-shot examples (toujours en tête pour ancrer le format JSON)
-        for user_msg, assistant_msg in FEW_SHOT_EXAMPLES[:8]:
-            messages.append({"role": "user",      "content": user_msg})
-            messages.append({"role": "assistant", "content": assistant_msg})
+        messages.extend(format_few_shot_examples(FEW_SHOT_EXAMPLES))
 
         # [C2] Historique : inclure user ET assistant, pas seulement user
         if history_to_use:
             for msg in history_to_use[-12:]:
                 role    = msg.get("role", "user")
+
+
+
+
+
+
+
+
                 content = str(msg.get("content", "")).strip()
 
                 # Ignorer les messages vides ou les rôles inconnus
@@ -496,13 +524,29 @@ class CommandParser:
         messages.append({"role": "user", "content": command})
 
         # ── Appel API ─────────────────────────────────────────────────────────
+        tools = convert_intents_to_tools()
         response = self.client.chat.completions.create(
             model=GROQ_MODEL_NAME,
             messages=messages,
+            tools=tools,
+            tool_choice="auto",
             temperature=0.1,
-            max_tokens=300,
-            response_format={"type": "json_object"},
         )
+
+        msg = response.choices[0].message
+        if msg.tool_calls:
+            # Si Groq utilise un outil, on formate le résultat comme attendu par l'agent
+            tc = msg.tool_calls[0]
+            try:
+                params = json.loads(tc.function.arguments)
+                return {
+                    "intent": tc.function.name,
+                    "params": params,
+                    "confidence": 1.0,
+                    "response_message": f"Exécution de {tc.function.name}...",
+                    "raw": command
+                }
+            except: pass
 
         raw_json = response.choices[0].message.content.strip()
         return self._parse_json_response(raw_json, command)
@@ -535,7 +579,8 @@ INTENTIONS DISPONIBLES :
 {intents_block}{memory_block}
 
 RÈGLES :
-1. Lis TOUTE la phrase — ne te base jamais sur un seul mot-clé.
+1. Lis TOUTE la phrase — ne te base jamais sur un seul mot-clé, analyse et deduis l'intention
+
 2. "luminosité" / "luminos" → SCREEN_BRIGHTNESS, jamais AUDIO_PLAY.
 3. "ferme ça/là/cette fenêtre" → WINDOW_CLOSE, jamais SCREEN_OFF.
 4. "mode nuit/travail/cinéma" → MACRO_RUN avec le nom de la macro.
@@ -684,7 +729,10 @@ FORMAT (JSON uniquement) :
 
         # ── Musique [B8] ──────────────────────────────────────────────────────
         if any(k in lower for k in ["musique suivante", "chanson suivante", "piste suivante", "next track", "suivant"]):
-            return {"intent": "MUSIC_NEXT", "params": {}, "confidence": 0.9}
+            if any(k in lower for k in ["page suivante", "onglet suivant", "navigateur", "browser"]):
+                pass
+            else:
+                return {"intent": "MUSIC_NEXT", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["musique precedente", "chanson precedente", "piste precedente", "previous track"]):
             return {"intent": "MUSIC_PREV", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["mets en pause", "pause musique", "pause la musique", "stoppe la musique"]):
@@ -900,11 +948,11 @@ FORMAT (JSON uniquement) :
             return {"intent": "MUSIC_PLAY", "params": {"query": query}, "confidence": 0.75}
 
         # ── Applications ──────────────────────────────────────────────────────
-        if any(k in lower for k in ["ouvre", "lance", "demarre", "mets", "start"]) and "dossier" not in lower and "fichier" not in lower:
+        if any(k in lower for k in ["ouvre", "lance", "demarre", "mets", "start"]) and "dossier" not in lower and "fichier" not in lower and not any(k in lower for k in ["navigateur", "browser", "onglet", "page web", "sur internet", "site", "youtube", "github", "google", "bing", "wikipedia", "reddit", "stackoverflow", "gmail", "duckduckgo", "amazon", "http", "www.", ".com", ".fr", ".org", ".net", "resultat", "résultat"]):
             app_name = self._extract_after(lower, ["ouvre ", "lance ", "demarre ", "mets ", "start "])
             if app_name and not any(c in app_name for c in ["/", "\\"]):
                 return {"intent": "APP_OPEN", "params": {"app_name": app_name, "args": []}, "confidence": 0.75}
-        if any(k in lower for k in ["ferme", "referme", "close", "quitte", "quit"]):
+        if any(k in lower for k in ["ferme", "referme", "close", "quitte", "quit"]) and not any(k in lower for k in ["onglet", "navigateur", "browser", "page", "chrome", "firefox", "edge", "brave"]):
             if any(k in lower for k in ["la", "ca", "ça", "cette", "fenetre", "fenêtre", "ici"]):
                 return {"intent": "WINDOW_CLOSE", "params": {"query": ""}, "confidence": 0.85}
             app_name = self._extract_after(lower, ["ferme ", "referme ", "close ", "quitte ", "quit "])
@@ -941,7 +989,7 @@ FORMAT (JSON uniquement) :
             return {"intent": "BROWSER_LIST_TABS", "params": {}, "confidence": 0.95}
         if any(k in lower for k in ["nouvel onglet", "ouvre un onglet", "new tab", "ouvre un nouvel onglet"]):
             return {"intent": "BROWSER_NEW_TAB", "params": {}, "confidence": 0.95}
-        if any(k in lower for k in ["ferme l onglet", "ferme cet onglet", "close tab", "ferme l'onglet actif"]):
+        if any(k in lower for k in ["ferme l onglet", "ferme l'onglet", "ferme cet onglet", "close tab", "ferme l'onglet actif"]):
             return {"intent": "BROWSER_CLOSE_TAB", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["recharge la page", "actualise la page", "refresh", "recharger la page", "actualiser"]):
             return {"intent": "BROWSER_RELOAD", "params": {}, "confidence": 0.9}
@@ -953,6 +1001,50 @@ FORMAT (JSON uniquement) :
             return {"intent": "BROWSER_EXTRACT_LINKS", "params": {}, "confidence": 0.9}
         if any(k in lower for k in ["ferme le navigateur", "ferme chrome", "ferme firefox", "ferme edge", "ferme brave", "close browser"]):
             return {"intent": "BROWSER_CLOSE", "params": {}, "confidence": 0.9}
+        if any(k in lower for k in ["scrolle", "scroll", "defile", "défile"]):
+            direction = "down"
+            if any(k in lower for k in ["haut", "up", "top"]):
+                direction = "up"
+            elif any(k in lower for k in ["bas", "down", "bottom"]):
+                direction = "down"
+            return {"intent": "BROWSER_SCROLL", "params": {"direction": direction}, "confidence": 0.9}
+        open_site_match = re.search(
+            r"^ouvre\s+(youtube|github|google|bing|wikipedia|reddit|stackoverflow|gmail|amazon|duckduckgo)$",
+            lower,
+        )
+        if open_site_match:
+            site = open_site_match.group(1)
+            open_urls = {
+                "youtube": "https://www.youtube.com",
+                "github": "https://github.com",
+                "google": "https://www.google.com",
+                "bing": "https://www.bing.com",
+                "wikipedia": "https://fr.wikipedia.org",
+                "reddit": "https://www.reddit.com",
+                "stackoverflow": "https://stackoverflow.com",
+                "gmail": "https://mail.google.com",
+                "amazon": "https://www.amazon.fr",
+                "duckduckgo": "https://duckduckgo.com",
+            }
+            return {
+                "intent": "BROWSER_OPEN",
+                "params": {"url": open_urls.get(site, "")},
+                "confidence": 0.92,
+            }
+
+        site_match = re.search(
+            r"(?:va sur|ouvre|go to|visite)\s+(youtube|github|google|bing|wikipedia|reddit|stackoverflow|gmail|amazon|duckduckgo)(?:\s+et\s+cherche\s+(.+))?$",
+            lower,
+        )
+        if site_match:
+            return {
+                "intent": "BROWSER_GO_TO_SITE",
+                "params": {
+                    "site": site_match.group(1),
+                    "query": (site_match.group(2) or "").strip(),
+                },
+                "confidence": 0.92,
+            }
         if any(k in lower for k in ["ouvre le resultat", "ouvre le premier", "ouvre le 1",
                                      "ouvre le deuxieme", "ouvre le 2", "ouvre le 2e",
                                      "ouvre le troisieme", "ouvre le 3"]):
@@ -964,10 +1056,189 @@ FORMAT (JSON uniquement) :
             return {"intent": "BROWSER_OPEN_RESULT", "params": {"rank": rank}, "confidence": 0.9}
 
         # ── Fichiers ou web ───────────────────────────────────────────────────
-        if any(k in lower for k in ["cherche", "trouve", "search"]):
+        ext_map = {
+            "pdf": "pdf", "doc": "doc", "docx": "docx", "txt": "txt", "md": "md",
+            "xls": "xls", "xlsx": "xlsx", "csv": "csv", "ppt": "ppt", "pptx": "pptx",
+            "jpg": "jpg", "jpeg": "jpeg", "png": "png", "gif": "gif", "zip": "zip",
+        }
+        ext_match = re.search(r"\b(pdf|docx?|txt|md|xlsx?|csv|pptx?|jpg|jpeg|png|gif|zip)\b", lower)
+        ext = ext_map.get(ext_match.group(1), "") if ext_match else ""
+
+        if any(k in lower for k in ["doublon", "fichier en double", "duplicate"]) and any(k in lower for k in ["supprime", "efface", "delete", "nettoie"]):
+            strategy = "keep_newest"
+            if any(k in lower for k in ["plus ancien", "oldest"]):
+                strategy = "keep_oldest"
+            elif any(k in lower for k in ["chemin court", "shortest path"]):
+                strategy = "keep_shortest_path"
+            dry_run = not any(k in lower for k in ["maintenant", "execute", "exécute", "go", "confirme"])
+            return {
+                "intent": "FILE_DELETE_DUPLICATES",
+                "params": {"strategy": strategy, "extension": ext, "dry_run": dry_run},
+                "confidence": 0.9,
+            }
+
+        if any(k in lower for k in ["doublon", "fichier en double", "duplicate"]):
+            return {
+                "intent": "FILE_FIND_DUPLICATES",
+                "params": {"extension": ext, "min_size": 1},
+                "confidence": 0.9,
+            }
+
+        if any(k in lower for k in ["nettoie", "clean"]) and any(k in lower for k in ["dossier vide", "dossiers vides", "empty folder"]):
+            folder = "downloads"
+            for token in ["downloads", "telechargements", "téléchargements", "documents", "bureau", "desktop"]:
+                if token in lower:
+                    folder = token
+                    break
+            dry_run = not any(k in lower for k in ["maintenant", "execute", "exécute", "go", "confirme"])
+            return {
+                "intent": "FILE_CLEAN",
+                "params": {"folder": folder, "dry_run": dry_run},
+                "confidence": 0.88,
+            }
+
+        if any(k in lower for k in ["renomme", "rename"]) and any(k in lower for k in ["tous les fichiers", "en masse", "bulk", "lot"]):
+            folder = ""
+            for token in ["downloads", "telechargements", "téléchargements", "documents", "bureau", "desktop"]:
+                if token in lower:
+                    folder = token
+                    break
+            pattern = self._extract_after(lower, ["remplace ", "replace "])
+            replacement = ""
+            if " par " in pattern:
+                parts = pattern.split(" par ", 1)
+                pattern = parts[0].strip(" '\"")
+                replacement = parts[1].strip(" '\"")
+            dry_run = not any(k in lower for k in ["maintenant", "execute", "exécute", "go", "confirme"])
+            return {
+                "intent": "FILE_BULK_RENAME",
+                "params": {
+                    "folder": folder,
+                    "pattern": pattern.strip(" '\""),
+                    "replacement": replacement,
+                    "extension_filter": ext,
+                    "dry_run": dry_run,
+                },
+                "confidence": 0.86,
+            }
+
+        if any(k in lower for k in ["organise", "organize", "range"]) and "dossier" in lower:
+            folder = "downloads"
+            for token in ["downloads", "telechargements", "téléchargements", "documents", "bureau", "desktop"]:
+                if token in lower:
+                    folder = token
+                    break
+            dry_run = not any(k in lower for k in ["maintenant", "execute", "exécute", "go", "confirme"])
+            return {
+                "intent": "FILE_ORGANIZE",
+                "params": {"folder": folder, "dry_run": dry_run},
+                "confidence": 0.88,
+            }
+
+        has_date_hint = any(k in lower for k in [
+            "aujourd", "hier", "semaine", "mois", "annee", "année", "last_7", "last_30", "last_90",
+        ])
+        has_size_hint = any(k in lower for k in [
+            "plus de", "moins de", "entre", "mo", "mb", "go", "gb", "ko", "kb", "taille",
+        ])
+        has_file_query = any(k in lower for k in ["fichier", "fichiers", "document", "documents", "trouve", "cherche", "recherche"])
+
+        if has_file_query and has_date_hint and has_size_hint:
+            period = "week"
+            if any(k in lower for k in ["aujourd", "today"]):
+                period = "today"
+            elif any(k in lower for k in ["hier", "yesterday"]):
+                period = "yesterday"
+            elif any(k in lower for k in ["mois", "month", "last_30"]):
+                period = "month"
+            elif any(k in lower for k in ["annee", "année", "year", "last_90"]):
+                period = "year"
+            size_value = self._extract_number(lower, default=10)
+            size_unit = "MB"
+            if any(k in lower for k in ["go", "gb"]):
+                size_unit = "GB"
+            elif any(k in lower for k in ["ko", "kb"]):
+                size_unit = "KB"
+            return {
+                "intent": "FILE_SEARCH_ADVANCED",
+                "params": {
+                    "extension": ext,
+                    "period": period,
+                    "min_size": size_value,
+                    "size_unit": size_unit,
+                },
+                "confidence": 0.87,
+            }
+
+        if has_file_query and has_date_hint:
+            period = "week"
+            if any(k in lower for k in ["aujourd", "today"]):
+                period = "today"
+            elif any(k in lower for k in ["hier", "yesterday"]):
+                period = "yesterday"
+            elif any(k in lower for k in ["mois", "month", "last_30"]):
+                period = "month"
+            elif any(k in lower for k in ["annee", "année", "year", "last_90"]):
+                period = "year"
+            return {
+                "intent": "FILE_SEARCH_DATE",
+                "params": {"period": period, "extension": ext},
+                "confidence": 0.86,
+            }
+
+        if has_file_query and has_size_hint:
+            min_size = self._extract_number(lower, default=10)
+            unit = "MB"
+            if any(k in lower for k in ["go", "gb"]):
+                unit = "GB"
+            elif any(k in lower for k in ["ko", "kb"]):
+                unit = "KB"
+            operator = "gt"
+            if any(k in lower for k in ["moins de", "inferieur", "inférieur", "lt"]):
+                operator = "lt"
+            return {
+                "intent": "FILE_SEARCH_SIZE",
+                "params": {"min_size": min_size, "operator": operator, "unit": unit, "extension": ext},
+                "confidence": 0.86,
+            }
+
+        if re.search(r"(prepare|prépare|prepare moi|prepare mon).*(dossier).*(candidature|job|emploi)", lower):
+            dry_run = not any(k in lower for k in ["execute", "exécute", "fais le", "cree le zip", "crée le zip", "go"])
+            return {
+                "intent": "FILE_PREPARE_APPLICATION",
+                "params": {"dry_run": dry_run, "package_name": "dossier_candidature"},
+                "confidence": 0.9,
+            }
+
+        if re.search(r"(classe|classifie|classifie|catégorise|categorise).*(document|fichier)", lower):
+            move_files = any(k in lower for k in ["range", "deplace", "déplace", "organise physiquement"])
+            return {
+                "intent": "FILE_CLASSIFY",
+                "params": {"move_files": move_files, "max_results": 120},
+                "confidence": 0.88,
+            }
+
+        if ("google drive" in lower or "gdrive" in lower or "mon drive" in lower) and any(k in lower for k in ["sync", "synchronise", "synchroniser", "sauvegarde", "backup", "copie"]):
+            source = "documents"
+            for token in ["downloads", "telechargements", "téléchargements", "documents", "bureau", "desktop"]:
+                if token in lower:
+                    source = token
+                    break
+            dry_run = not any(k in lower for k in ["maintenant", "execute", "exécute", "fais le", "go"])
+            mode = "mirror" if any(k in lower for k in ["miroir", "mirror", "exactement pareil"]) else "copy"
+            return {
+                "intent": "FILE_SYNC_DRIVE",
+                "params": {"source": source, "mode": mode, "dry_run": dry_run},
+                "confidence": 0.88,
+            }
+
+        if any(k in lower for k in ["cherche sur youtube", "recherche sur youtube", "search youtube"]) or ("youtube" in lower and re.search(r"\b(cherche|recherche|search)\b", lower)):
+            query = self._extract_after(lower, ["cherche sur youtube ", "recherche sur youtube ", "search youtube ", "youtube "])
+            return {"intent": "BROWSER_SEARCH_YOUTUBE", "params": {"query": query}, "confidence": 0.9}
+        if re.search(r"\b(cherche|trouve|search)\b", lower):
             query = self._extract_after(lower, ["cherche ", "trouve ", "search "])
             if any(k in lower for k in ["sur le web", "sur google", "google", "internet",
-                                         "en ligne", "sur bing", "sur duckduckgo", "tutorial", "tutoriel"]):
+                                         "en ligne", "sur bing", "sur duckduckgo", "sur youtube", "tutorial", "tutoriel", "news", "nouvelles"]):
                 return {"intent": "BROWSER_SEARCH", "params": {"query": query}, "confidence": 0.85}
             return {"intent": "FILE_SEARCH", "params": {"query": query}, "confidence": 0.7}
         if any(k in lower for k in ["recherche", "google", "web", "internet"]):
@@ -976,6 +1247,35 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["youtube"]):
             query = self._extract_after(lower, ["youtube ", "sur youtube "])
             return {"intent": "BROWSER_SEARCH_YOUTUBE", "params": {"query": query}, "confidence": 0.85}
+
+        # ── BROWSER Sessions & Advanced (S6+) ──────────────────────────────────
+        if re.search(r"(sauvegarde|save).*(session|cookie|connexion|login)", lower):
+            site = ""
+            for kw in ["gmail", "github", "linkedin", "facebook", "twitter", "outlook", "notion", "discord"]:
+                if kw in lower:
+                    site = kw
+                    break
+            return {"intent": "BROWSER_SAVE_SESSION", "params": {"site": site or "site"}, "confidence": 0.88}
+
+        if re.search(r"(verifie|verify|check).*(connect|login|session|connexion)", lower):
+            site = ""
+            for kw in ["gmail", "github", "linkedin", "facebook", "twitter", "outlook", "notion", "discord"]:
+                if kw in lower:
+                    site = kw
+                    break
+            return {"intent": "BROWSER_CHECK_LOGIN", "params": {"site": site or "site"}, "confidence": 0.88}
+
+        if re.search(r"(resume|resumé|summary).*(structuré|structure|structured)", lower):
+            return {"intent": "BROWSER_EXTRACT_SUMMARY", "params": {}, "confidence": 0.9}
+
+        if re.search(r"(redige|rediges|compose|rédige|envoie).*(email|mail|message)", lower) or \
+           re.search(r"(email|mail|message).*(à|to).+avec", lower):
+            to = self._extract_email_address(lower) or ""
+            subject = self._extract_after(lower, ["objet ", "subject ", "sujet "])
+            body = self._extract_quoted_text(lower) or ""
+            return {"intent": "BROWSER_COMPOSE_EMAIL", 
+                   "params": {"to": to, "subject": subject, "body": body}, 
+                   "confidence": 0.85}
 
         # ── Documents ─────────────────────────────────────────────────────────
         if any(k in lower for k in ["lis le document", "lis le fichier", "lire le document", "ouvre le pdf"]):

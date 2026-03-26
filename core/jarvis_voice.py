@@ -55,6 +55,7 @@ _FALLBACKS: dict[str, list[str]] = {
     "SYSTEM_SHUTDOWN":  ["Extinction programmée.", "Le PC va s'éteindre dans quelques instants."],
     "SYSTEM_RESTART":   ["Redémarrage en cours.", "Je redémarre la machine."],
     "SYSTEM_LOCK":      ["Écran verrouillé.", "J'ai verrouillé l'écran."],
+
     "AUDIO_VOLUME_SET": ["Volume ajusté.", "C'est réglé.", "Volume modifié."],
     "AUDIO_VOLUME_UP":  ["Volume monté.", "J'ai augmenté le son."],
     "AUDIO_VOLUME_DOWN":["Volume baissé.", "J'ai réduit le son."],
@@ -115,6 +116,7 @@ RÈGLES ABSOLUES :
 11. Si des données sont affichées dans la bulle → dis juste
     "C'est affiché." ou "Voilà." — ne répète pas le contenu
 12. CRITIQUE : utilise UNIQUEMENT les noms d'apps/fenêtres fournis dans
+
     le contexte. N'invente JAMAIS de noms (Telegram, Spotify, etc.)
     si ce n'est pas explicitement mentionné.
 13. MUSIQUE : Jarvis utilise VLC comme lecteur local. JAMAIS Spotify,
@@ -126,7 +128,8 @@ EXEMPLES PARFAITS :
 - Volume 70% → "À 70%. Je retiens ça."
 - Fichier trouvé → "Trouvé dans E:/Médias — je l'ouvre ?"
 - Bonjour → "Jarvis à l'écoute. Qu'est-ce qu'on fait ?"
-- Éteins dans 10min → "Extinction dans 10 minutes. Je note."
+- Éteins dans 10min → "Extinction dans 10 minutes. Je note.
+
 
 Réponds UNIQUEMENT avec la phrase de Jarvis. Rien d'autre."""
 
@@ -262,7 +265,10 @@ class JarvisVoice:
         data    = (exec_result or {}).get("data")
 
         # [Bug1+7] Extraire les données CONCRÈTES selon l'intent
+
         data_hint = self._extract_concrete_data_hint(intent, params, data)
+
+
 
         context_msg = (
             f"Commande utilisateur : \"{user_command}\"\n"
