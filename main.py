@@ -1,3 +1,9 @@
+# Jarvis Desktop — Assistant Intelligent de Contrôle PC
+# Auteur : christoban
+# Description : Point d'entrée principal de l'application Jarvis Windows.
+#               Lance l'agent en mode interactif (terminal) et, à terme,
+#               le client WebSocket vers Azure (semaine 6).
+
 """
 main.py — Point d'entrée de l'agent Jarvis Windows
 Lance l'agent en mode interactif (terminal).
