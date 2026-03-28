@@ -427,6 +427,18 @@ class IntentExecutor:
     # ══════════════════════════════════════════════════════════════════════════
 
     def _app_open(self, p):
+        # Si le système de correction a détecté une action spécifique
+        # (ex: "non, ouvre un nouvel onglet" → action="new_tab"),
+        # rediriger vers le bon handler au lieu d'ouvrir une app.
+        action = p.get("action", "")
+        if action == "new_tab":
+            return self._browser_new_tab(p)
+        if action == "new_window":
+            return self._browser_open(p)
+        if action == "incognito":
+            app = p.get("app_name") or "chrome"
+            return self.am.open_app(app, args=["--incognito"])
+
         app   = p.get("app_name") or p.get("name") or ""
         args  = p.get("args", [])
         force = bool(p.get("force", False))

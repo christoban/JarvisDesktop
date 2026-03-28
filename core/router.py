@@ -40,13 +40,79 @@ class RouterResult:
 #  FAST INTENT PATTERNS (0 TOKEN)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# ── Sites web connus (pour BROWSER_GO_TO_SITE) ───────────────────────────
+_KNOWN_SITES = (
+    "youtube|github|google|gmail|bing|wikipedia|reddit|stackoverflow|"
+    "amazon|duckduckgo|twitter|linkedin|facebook|instagram|netflix|"
+    "notion|discord|twitch|outlook|whatsapp|chatgpt|claude"
+)
+
 FAST_INTENTS = {
-    # APPLICATIONS
+    # ══════════════════════════════════════════════════════════════════════
+    #  NAVIGATEUR — patterns spécifiques AVANT les patterns génériques
+    #  Corrige le bug : "ouvre un nouvel onglet" capturé par APP_OPEN
+    # ══════════════════════════════════════════════════════════════════════
+    "BROWSER_NEW_TAB": {
+        "patterns": [
+            # "ouvre un nouvel onglet", "ouvre onglet", "ouvre juste un onglet"
+            (r"(?:ouvre|ouvrir|lance)\s+(?:(?:un|juste|encore|moi)\s+)*(?:nouvel?\s+)?onglet(?:\s+(?P<url>.+))?", {"url": "{url}"}),
+            # "nouvel onglet", "nouveau onglet"
+            (r"nouvel?\s+onglet", {}),
+            (r"new\s+tab", {}),
+        ],
+        "keywords": ["nouvel onglet", "new tab", "ouvre un onglet"],
+    },
+    "BROWSER_CLOSE_TAB": {
+        "patterns": [
+            (r"(?:ferme|referme)\s+(?:l'|l |cet\s+)?onglet", {}),
+            (r"close\s+(?:the\s+)?tab", {}),
+        ],
+        "keywords": ["ferme l'onglet", "ferme cet onglet", "close tab"],
+    },
+    "BROWSER_GO_TO_SITE": {
+        "patterns": [
+            # "ouvre youtube", "va sur github", "lance gmail"
+            (r"(?:ouvre|lance|va\s+sur|visite)\s+(?P<site>" + _KNOWN_SITES + r")\b", {"site": "{site}"}),
+        ],
+        "keywords": [],
+    },
+    "BROWSER_SEARCH": {
+        "patterns": [
+            # "cherche X sur google", "recherche X sur internet"
+            (r"(?:cherche|recherche)\s+(?P<query>.+?)\s+sur\s+(?:le\s+)?(?:web|internet|google|bing)", {"query": "{query}"}),
+        ],
+        "keywords": [],
+    },
+
+    # ══════════════════════════════════════════════════════════════════════
+    #  APPLICATIONS — avec exclusion des termes navigateur/musique
+    # ══════════════════════════════════════════════════════════════════════
     "APP_OPEN": {
         "patterns": [
-            (r"(?:ouvre|lance|démarre|mets)\s+(?P<app>.+)", {"app_name": "{app}"}),
+            # Exclut : onglet, musique/chanson/playlist, sites web connus
+            (r"(?:ouvre|lance|démarre|mets)\s+"
+             r"(?!(?:(?:un|juste|encore|moi)\s+)*(?:nouvel?\s+)?onglet"
+             r"|(?:de\s+la\s+)?(?:musique|chanson)"
+             r"|(?:la\s+|ma\s+)?playlist"
+             r"|(?:en\s+)?pause"
+             r"|(?:" + _KNOWN_SITES + r")\b"
+             r")(?P<app>.+)",
+             {"app_name": "{app}"}),
         ],
         "keywords": ["ouvre", "lance", "démarre"],
+    },
+    "APP_CLOSE": {
+        "patterns": [
+            # "ferme spotify", "quitte discord" — exclut onglet/fenêtre/navigateur
+            (r"(?:ferme|quitte|close|arrête)\s+"
+             r"(?!(?:l'|l |cet\s+)?onglet"
+             r"|(?:le\s+)?navigateur"
+             r"|(?:la\s+|cette\s+)?(?:fenêtre|fenetre)"
+             r"|ça|ca"
+             r")(?P<app>.+)",
+             {"app_name": "{app}"}),
+        ],
+        "keywords": [],
     },
 
     # FICHIERS
@@ -152,7 +218,7 @@ FAST_INTENTS = {
         "patterns": [
             (r"(?:ferme|referme)\s+(?:ça|ca|ça|cette|l(?:a|')?|le\s+)?(?:fenetre|fenêtre|ça|ca)", {}),
         ],
-        "keywords": ["ferme", "close"],
+        "keywords": ["ferme la fenêtre", "ferme ça"],
     },
 
     # RÉSEAU
@@ -237,18 +303,20 @@ def normalize(text: str) -> str:
     text = text.lower().strip()
 
     # Remplacements courants
+    # IMPORTANT : les formes normalisées doivent correspondre aux verbes
+    # utilisés dans FAST_INTENTS (ouvre, lance, mets, ferme, etc.)
     replacements = {
         "s'il te plaît": "",
         "stp": "",
         "est-ce que tu peux": "",
         "peux-tu": "",
         "est-ce que": "",
-        "lancer": "ouvrir",
-        "démarrer": "ouvrir",
-        "démarre": "ouvrir",
-        "mets-moi": "mettre",
-        "amène": "mettre",
-        "ouvre-moi": "ouvrir",
+        "lancer": "lance",
+        "démarrer": "ouvre",
+        "démarre": "ouvre",
+        "mets-moi": "mets",
+        "amène": "mets",
+        "ouvre-moi": "ouvre",
         "exécute": "lance",
         "execute": "lance",
     }

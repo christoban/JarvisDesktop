@@ -1680,6 +1680,23 @@ class CommandParser:
                         out["confidence"] = max(confidence, 0.9)
                         return out
 
+        # Correction navigateur : "onglet" dans la commande mais intent = APP_OPEN/BROWSER_OPEN
+        # Groq confond souvent "ouvre un nouvel onglet" avec APP_OPEN ou BROWSER_OPEN
+        if any(k in lower for k in ["nouvel onglet", "ouvre un onglet", "ouvre onglet", "new tab"]):
+            if intent in ("APP_OPEN", "BROWSER_OPEN", "UNKNOWN"):
+                out["intent"]     = "BROWSER_NEW_TAB"
+                out["params"]     = {}
+                out["confidence"] = max(confidence, 0.95)
+                return out
+
+        # Correction navigateur : "ferme l'onglet" confondu avec WINDOW_CLOSE/APP_CLOSE
+        if any(k in lower for k in ["ferme l'onglet", "ferme cet onglet", "ferme l onglet", "close tab"]):
+            if intent in ("WINDOW_CLOSE", "APP_CLOSE", "UNKNOWN"):
+                out["intent"]     = "BROWSER_CLOSE_TAB"
+                out["params"]     = {}
+                out["confidence"] = max(confidence, 0.95)
+                return out
+
         # Si Groq est très confiant, ne pas toucher
         if confidence >= 0.85:
             return out
