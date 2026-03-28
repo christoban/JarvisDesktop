@@ -11,21 +11,18 @@ Mémoire conversationnelle :
 
 import time
 import re
-import psutil
-import pygetwindow as gw
 from pathlib import Path
-import json
 
 from config.logger import get_logger
+from core.dataset_builder import save_entry
 from core.jarvis_memory import JarvisMemory
-from core.command_parser import CommandParser
-from core.intent_executor import IntentExecutor
-from core.history_manager import HistoryManager
-from core.macros import MacroManager
-from core.jarvis_voice import JarvisVoice
-from core.router import route  # TONY STARK LEVEL 2: Smart multi-layer routing
 
 logger = get_logger(__name__)
+
+# Pre-compiled pattern used to detect log lines leaked into stdin.
+_LOG_LINE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s*\|\s*(INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL)"
+)
 
 MAX_HISTORY = 8   # Nombre d'échanges conservés en mémoire
 
@@ -187,6 +184,11 @@ class Agent:
 
         # Pré-chargement immédiat — évite les délais à la première commande
         logger.info("Pré-chargement des modules Jarvis...")
+        from core.command_parser import CommandParser
+        from core.intent_executor import IntentExecutor
+        from core.history_manager import HistoryManager
+        from core.macros import MacroManager
+        from core.jarvis_voice import JarvisVoice
         self._parser   = CommandParser()
         self._executor = IntentExecutor()
         self._history  = HistoryManager()
@@ -198,24 +200,28 @@ class Agent:
     @property
     def parser(self):
         if self._parser is None:
+            from core.command_parser import CommandParser
             self._parser = CommandParser()
         return self._parser
 
     @property
     def executor(self):
         if self._executor is None:
+            from core.intent_executor import IntentExecutor
             self._executor = IntentExecutor()
         return self._executor
 
     @property
     def history(self):
         if self._history is None:
+            from core.history_manager import HistoryManager
             self._history = HistoryManager()
         return self._history
 
     @property
     def macros(self):
         if self._macros is None:
+            from core.macros import MacroManager
             self._macros = MacroManager()
         return self._macros
 
@@ -223,6 +229,7 @@ class Agent:
     def voice(self):
         """JarvisVoice — moteur de réponse naturelle (lazy init)."""
         if self._voice is None:
+            from core.jarvis_voice import JarvisVoice
             self._voice = JarvisVoice()
         return self._voice
 
@@ -245,9 +252,6 @@ class Agent:
         # Détecter et mémoriser les faits personnels — toujours, peu importe le chemin
         self._memory.extract_facts_from_command(raw)
 
-        # ── Capturer le contexte sensoriel (TONY STARK V2) ─────────────────────
-        sensory_str, sensory_dict = self._get_sensory_context()
-
         # ── Réponse de suivi en attente ? ─────────────────────────────────────
         if self.context.has_pending():
             result = self._handle_followup(raw)
@@ -263,7 +267,6 @@ class Agent:
                     params=followup_params,
                     exec_result=result,
                     conversation_history=self.context.history,
-                    sensory_context=sensory_dict,  # TONY STARK V2 — dict pour jarvis_voice
                 )
                 result = dict(result)
                 result["message"] = natural_msg
@@ -295,24 +298,13 @@ class Agent:
             history_for_groq = [
                 {"role": "system", "content": f"MÉMOIRE JARVIS:\n{full_summary}", "memory": full_summary}
             ] + history_for_groq
-        
-        # Sensory context déjà capturé au début de handle_command()
-        if sensory_str:
-            history_for_groq.append({"role": "system", "content": f"ÉTAT PC ACTUEL:\n{sensory_str}"})
 
-        # ──── TONY STARK LEVEL 2: Smart Router (90% commands 0 tokens) ────
-        # Wrapper pour que le router puisse appeler le LLM parser avec contexte
-        def llm_parser_with_context(command: str) -> dict:
-            return self.parser.parse_with_context(command, history_for_groq) or {}
-        
-        router_result = route(raw, llm_parser=llm_parser_with_context)
-        intent       = router_result.intent
-        parsed_params = router_result.params
-        confidence   = router_result.confidence
-        parse_source = router_result.source
-        
-        params       = self._apply_context_to_params(raw, intent, parsed_params or {})
+        parsed       = self.parser.parse_with_context(raw, history_for_groq)
+        intent       = parsed.get("intent",     "UNKNOWN")
+        params       = self._apply_context_to_params(raw, intent, parsed.get("params", {}) or {})
         intent, params = self._override_intent_with_context(raw, intent, params)
+        confidence   = parsed.get("confidence", 0.0)
+        parse_source = parsed.get("source",     "fallback")
         logger.info(f"Intent={intent} conf={confidence:.2f} src={parse_source} params={params}")
 
         clarification = self._build_clarification_if_needed(raw, intent, params, confidence, parse_source)
@@ -336,45 +328,9 @@ class Agent:
             )
             return enriched
 
-        # ── MULTI_ACTION [TONY STARK V2] — intent JSON fallback ─────────────
-        # Quand Groq retourne intent="MULTI_ACTION" avec params.actions[]
-        # (chemin JSON structuré, en complément du chemin tool_calls natif)
-        if intent == "MULTI_ACTION":
-            actions = params.get("actions") or []
-            if actions:
-                from core.multi_action import MultiActionExecutor
-                executor_multi = MultiActionExecutor(self.executor, self)
-                # Convertir format MULTI_ACTION → format tool_calls
-                tool_calls = [
-                    {"type": "function", "function": {
-                        "name": a.get("intent", "UNKNOWN"),
-                        "arguments": a.get("params", {})
-                    }} for a in actions
-                ]
-                multi_result = executor_multi.execute_tool_calls(tool_calls, max_steps=4)
-                multi_result = self._normalize_result(multi_result)
-                jarvis_msg = self.voice.generate(
-                    user_command=raw, intent="MULTI_ACTION",
-                    params=params, exec_result=multi_result,
-                    conversation_history=self.context.history,
-                    sensory_context=sensory_dict,
-                )
-                multi_result = dict(multi_result)
-                multi_result["message"] = jarvis_msg
-                self.context.add_user(raw)
-                self.context.add_assistant(jarvis_msg)
-                self._update_universal_memory("MULTI_ACTION", params, multi_result)
-                enriched = self._enrich(multi_result, "MULTI_ACTION", confidence, parse_source)
-                self._save_history_entry(
-                    command=raw, result=enriched, intent="MULTI_ACTION",
-                    source=source or parse_source,
-                    duration_ms=int((time.time() - started) * 1000),
-                )
-                return enriched
-
         # ── Réponse directe (sans exécution) pour questions de connaissance ─
         if intent == "KNOWLEDGE_QA":
-            direct_msg = parsed_params.get("response_message", "").strip()
+            direct_msg = (parsed.get("response_message") or "").strip()
             if not direct_msg:
                 direct_msg = "Je peux répondre directement à cette question. Reformule-la en une phrase simple."
 
@@ -397,29 +353,9 @@ class Agent:
             )
             return enriched
 
-        # ── Multi-Action Loop (TONY STARK V2) ──────────────────────────────────
-        # Si le parser a retourné des tool_calls, exécuter séquentiellement
-        parsed_tool_calls = parsed_params.get("tool_calls") if isinstance(parsed_params, dict) else None
-        if parsed_tool_calls:
-            try:
-                executor_multi = MultiActionExecutor(self.executor, self)
-                multi_result = executor_multi.execute_tool_calls(
-                    parsed_tool_calls,
-                    max_steps=4
-                )
-                # Formater la réponse multi-action
-                result = executor_multi.format_multi_action_response(multi_result)
-                result["multi_action"] = True
-                logger.info(f"Multi-action execution: {len(parsed_tool_calls)} actions completed")
-            except Exception as e:
-                logger.error(f"Multi-action execution failed: {e}, falling back to single-action")
-                # Fallback to single-action execution
-                result = self.executor.execute(intent, params, raw_command=raw, agent=self)
-            result = self._normalize_result(result)
-        else:
-            # ── Exécution simple (single-action) ──────────────────────────────
-            result = self.executor.execute(intent, params, raw_command=raw, agent=self)
-            result = self._normalize_result(result)
+        # ── Exécution ─────────────────────────────────────────────────────────
+        result = self.executor.execute(intent, params, raw_command=raw, agent=self)
+        result = self._normalize_result(result)
 
         # ── Réponse naturelle JARVIS — générée dynamiquement par Groq ─────────
         # Plus de if/if/if avec des répliques figées.
@@ -431,12 +367,11 @@ class Agent:
             params=params,
             exec_result=result,
             conversation_history=self.context.history,
-            sensory_context=sensory_dict,  # TONY STARK V2 — dict pour jarvis_voice
         )
         result = dict(result) if result else {"success": False, "message": jarvis_message, "data": {}}
         result["message"] = jarvis_message
         
-
+        # [FIX MUSIC_PLAYLIST_LIST] - Append display data if available
         # Some intents (like MUSIC_PLAYLIST_LIST) have formatted display tables
         # that should be shown to the user alongside the natural message
         if result and isinstance(result, dict):
@@ -477,6 +412,14 @@ class Agent:
             source=source or parse_source,
             duration_ms=int((time.time() - started) * 1000),
         )
+        # ── Dataset logger (Apprentissage Propre) ────────────────────────
+        # On sauvegarde l'intention corrigée par l'agent, pas la brute de Groq
+        if enriched.get("_confidence", 0) >= 0.80:
+            save_entry(
+                input_text=raw,
+                result={"intent": intent, "params": params, "confidence": confidence},
+                source=source or parse_source
+            )
         return enriched
 
     @staticmethod
@@ -517,30 +460,6 @@ class Agent:
         choices      = pending.get("choices", [])
         original_cmd = pending.get("raw_command", "")
         r = reply.lower().strip()
-
-        # ── Confirmation explicite oui/non pour actions sensibles ───────────
-        confirm_payload = params.get("__confirm_action__") if isinstance(params, dict) else None
-        if isinstance(confirm_payload, dict):
-            yes_words = {"oui", "ouais", "ok", "okay", "go", "vas-y", "fais-le", "fais le", "confirme", "yes", "y"}
-            no_words = {"non", "no", "n", "annule", "stop", "laisse", "ne fais pas", "ne le fais pas", "cancel"}
-
-            if r in yes_words or any(f" {w} " in f" {r} " for w in yes_words):
-                yes_intent = confirm_payload.get("intent") or intent
-                yes_params = dict(confirm_payload.get("params") or {})
-                return self.executor.execute(yes_intent, yes_params, raw_command=original_cmd or reply, agent=self)
-
-            if r in no_words or any(f" {w} " in f" {r} " for w in no_words):
-                return {
-                    "success": True,
-                    "message": "D'accord, action annulée.",
-                    "data": {"cancelled": True, "awaiting_choice": False},
-                }
-
-            return {
-                "success": False,
-                "message": "Réponds simplement par 'oui' pour confirmer ou 'non' pour annuler.",
-                "data": {"awaiting_choice": True, "choices": choices},
-            }
 
         if intent == "__CLARIFY_INTENT__":
             clarified = self._resolve_intent_clarification(reply, pending.get("choices", []), original_cmd)
@@ -604,21 +523,21 @@ class Agent:
                     {"role": "system", "content": f"MÉMOIRE JARVIS :\n{memory_summary}"}
                 ] + history_for_groq
 
-            # ──── TONY STARK LEVEL 2: Use router instead of direct parse ────
-            def llm_parser_with_context_reply(command: str) -> dict:
-                return self.parser.parse_with_context(command, history_for_groq) or {}
-            
-            router_result = route(reply, llm_parser=llm_parser_with_context_reply)
-            p_intent = router_result.intent
-            p_params = router_result.params
-            
+            parsed = self.parser.parse_with_context(reply, history_for_groq)
+            p_intent = parsed.get("intent", "UNKNOWN")
+            p_params = parsed.get("params", {}) or {}
             if p_intent == "KNOWLEDGE_QA":
                 return {
                     "success": True,
-                    "message": (router_result.params.get("response_message") or "").strip() or "Je te réponds directement.",
-                    "data": {"mode": "knowledge_qa", "answered_by": router_result.source},
+                    "message": (parsed.get("response_message") or "").strip() or "Je te réponds directement.",
+                    "data": {"mode": "knowledge_qa", "answered_by": parsed.get("source", "groq")},
                 }
             if p_intent not in ("UNKNOWN", "INCOMPLETE", ""):
+                # Apply the same context overrides as the main command path so
+                # that, e.g., "non, ouvre un nouvel onglet" correctly becomes
+                # BROWSER_NEW_TAB instead of APP_OPEN.
+                p_params = self._apply_context_to_params(reply, p_intent, p_params)
+                p_intent, p_params = self._override_intent_with_context(reply, p_intent, p_params)
                 return self.executor.execute(
                     p_intent, p_params,
                     raw_command=reply, agent=self
@@ -646,21 +565,17 @@ class Agent:
 
         # ── Déléguer à Groq avec contexte enrichi ────────────────────────────
         full_cmd = f"{original_cmd} — précision: {reply}"
-        
-        # Utiliser le router pour éviter appels LLM inutiles
-        def llm_parser_for_clarify(command: str) -> dict:
-            return self.parser.parse(command) or {}
-        
-        router_result = route(full_cmd, llm_parser=llm_parser_for_clarify)
-        if router_result.intent == "KNOWLEDGE_QA":
+        parsed = self.parser.parse(full_cmd)
+        if parsed.get("intent") == "KNOWLEDGE_QA":
             return {
                 "success": True,
-                "message": router_result.params.get("response_message", "").strip() or "Je te réponds directement.",
-                "data": {"mode": "knowledge_qa", "answered_by": router_result.source},
+                "message": (parsed.get("response_message") or "").strip() or "Je te réponds directement.",
+                "data": {"mode": "knowledge_qa", "answered_by": parsed.get("source", "groq")},
             }
-        if router_result.intent not in ("UNKNOWN", ""):
-            result = self.executor.execute(router_result.intent, router_result.params, raw_command=full_cmd, agent=self)
+        if parsed.get("intent") not in ("UNKNOWN", ""):
+            result = self.executor.execute(parsed["intent"], parsed["params"], raw_command=full_cmd, agent=self)
             return result
+
         return None
 
     def _resolve_intent_clarification(self, reply: str, choices: list, original_cmd: str) -> dict | None:
@@ -882,23 +797,6 @@ class Agent:
             )
         except Exception as exc:
             logger.warning(f"Sauvegarde historique ignorée: {exc}")
-
-        # Alimenter le dataset d'entrainement avec l'intent final execute.
-        # Cela garde un historique propre meme si le router a corrige un intent.
-        try:
-            from core.dataset_builder import save_entry
-
-            save_entry(
-                input_text=command,
-                result={
-                    "intent": intent,
-                    "params": {},
-                    "confidence": float((result or {}).get("_confidence", 0.0)),
-                },
-                source=source or "agent",
-            )
-        except Exception:
-            pass
 
     @staticmethod
     def _choice_text(choice) -> str:
@@ -1511,8 +1409,12 @@ class Agent:
         if not self._mentions_new_tab(lower):
             return None
 
-        if intent in {"BROWSER_NEW_TAB", "BROWSER_SEARCH", "BROWSER_URL"}:
-            return None
+        # Si on mentionne un onglet, on force BROWSER_NEW_TAB même si Groq a dit APP_OPEN
+        # sauf si l'intention est déjà une action spécifique de navigation
+        if intent in {"BROWSER_SEARCH", "BROWSER_URL"}:
+             # On garde l'intent mais on s'assure qu'il sait que c'est pour un onglet
+             params["target_type"] = "new_tab"
+             return intent, params
 
         count = self._extract_count_from_text(lower)
         query = ""
@@ -1560,19 +1462,16 @@ class Agent:
     @staticmethod
     def _mentions_new_tab(lower: str) -> bool:
         return any(token in lower for token in [
-            "ouvre un nouvel onglet",
-            "ouvre une nouvel onglet",
-            "ouvre une nouvelle onglet",
+            "nouvel onglet", "nouveaux onglets", "new tab", "new tabs",
+            "ouvre un onglet", "un onglet", "un nouvel onglet", 
+            "plutot un onglet", "plutôt un onglet", "plutot un nouvel onglet",
+            "plutôt un nouvel onglet", "dans la fenetre", "dans la fenêtre",
             "ouvre deux nouveaux onglets",
             "ouvre trois nouveaux onglets",
             "ouvre quatre nouveaux onglets",
             "ouvre cinq nouveaux onglets",
             "ouvre des nouveaux onglets",
-            "ouvre plusieurs nouveaux onglets",
-            "nouvel onglet",
-            "nouveaux onglets",
-            "new tab",
-            "new tabs",
+            "ouvre plusieurs nouveaux onglets"
         ])
 
     @staticmethod
@@ -1915,6 +1814,11 @@ class Agent:
                     self.stop()
                     break
 
+                # Skip log lines that leaked into stdin from background threads
+                # (e.g. Telegram bot error messages printed while input() waits).
+                if self._looks_like_log_entry(command):
+                    continue
+
                 result     = self.handle_command(command)
                 intent     = result.get("_intent", "")
                 confidence = result.get("_confidence", 0.0)
@@ -1944,32 +1848,6 @@ class Agent:
         logger.info("Agent arrêté.")
         print("\n👋 Jarvis arrêté. À bientôt !")
 
-    def _get_sensory_context(self) -> tuple[str, dict]:
-        """
-        Capture le contexte sensoriel du PC.
-        Retourne (str_for_groq_history, dict_for_voice).
-        STR  → injecté dans history_for_groq pour le parsing
-        DICT → passé à jarvis_voice._build_messages() pour personnalisation réponse
-        """
-        from config.settings import SENSORY_CONTEXT_ENABLED, SENSORY_TIMEOUT_MS
-        if not SENSORY_CONTEXT_ENABLED:
-            return "", {}
-        try:
-            from core.sensory import SensoryCapteur
-            import time as _time
-            start = _time.time()
-            context_dict = SensoryCapteur.capture_full_context()
-            elapsed_ms = int((_time.time() - start) * 1000)
-            if elapsed_ms > SENSORY_TIMEOUT_MS:
-                logger.debug(f"Sensory timeout ({elapsed_ms}ms > {SENSORY_TIMEOUT_MS}ms)")
-                return "", {}
-            formatted_str = SensoryCapteur.format_for_groq(context_dict)
-            return formatted_str, context_dict
-        except Exception as e:
-            logger.warning(f"Erreur capture contexte sensoriel : {e}")
-            return "", {}
-
-    
     def _enrich(self, result: dict, intent: str, confidence: float, source: str) -> dict:
         result = dict(result)
         result["_intent"]     = intent
@@ -1988,7 +1866,6 @@ class Agent:
         if match:
             val, unit = int(match.group(1)), match.group(2)
             return val * 60 if "min" in unit else val
-
         return default
 
     @staticmethod
@@ -1999,3 +1876,12 @@ class Agent:
                 if after:
                     return after
         return ""
+
+    @staticmethod
+    def _looks_like_log_entry(text: str) -> bool:
+        """
+        Détecte si le texte ressemble à une ligne de log qui a été injectée
+        dans le flux stdin depuis un thread d'arrière-plan (ex : Telegram bot).
+        Format typique : '2026-03-28 11:42:58 | ERROR | core.xxx | message'
+        """
+        return bool(_LOG_LINE_RE.search(text))

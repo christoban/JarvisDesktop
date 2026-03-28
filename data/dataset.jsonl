@@ -28,3 +28,13 @@
 {"timestamp": "2026-03-28T11:42:32.959330", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {}, "confidence": 0.9, "source": "fast_intent"}
 {"timestamp": "2026-03-28T11:42:56.393331", "input": "non, ouvre un nouvel onglet sur la fenetre chrome actuelle", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
 {"timestamp": "2026-03-28T11:43:35.922900", "input": "Jarvis > 2026-03-28 11:42:58 | ERROR    | core.telegram_bot              | Erreur fetch_updates: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=35)", "intent": "SYSTEM_TIME", "params": {}, "confidence": 0.95, "source": "llm"}
+{"timestamp": "2026-03-28T16:04:21.019690", "input": "Ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome", "args": []}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T16:04:21.020690", "input": "Ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome", "args": []}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T16:13:22.699591", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome", "args": []}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T16:13:22.700592", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome", "args": []}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T16:19:33.453982", "input": "ouvre un nouvel onglet dans la fenetre actuelle", "intent": "BROWSER_NEW_TAB", "params": {}, "confidence": 0.98, "source": "groq"}
+{"timestamp": "2026-03-28T17:57:05.059799", "input": "Joue ma playlist goapel hit", "intent": "MUSIC_PLAYLIST_PLAY", "params": {"name": "goapel hit"}, "confidence": 0.98, "source": "telegram"}
+{"timestamp": "2026-03-28T17:58:40.975255", "input": "Arrete la playlist", "intent": "MUSIC_PAUSE", "params": {}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-03-28T17:58:51.038648", "input": "Liste mes playlists", "intent": "MUSIC_PLAYLIST_LIST", "params": {}, "confidence": 0.9, "source": "telegram"}
+{"timestamp": "2026-03-28T17:59:36.193868", "input": "Joue la playlist testament de louange", "intent": "MUSIC_PLAYLIST_PLAY", "params": {"name": "testament de louange"}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-03-28T18:00:27.705675", "input": "Mets la pause", "intent": "MUSIC_PAUSE", "params": {}, "confidence": 0.99, "source": "telegram"}

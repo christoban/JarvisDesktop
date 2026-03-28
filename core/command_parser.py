@@ -720,15 +720,6 @@ class CommandParser:
 
         # ── Étape 4 : Groq (fallback) ─────────────────────────────────────
         groq_result = self._call_groq_ai(command, history or [])
-
-        # Logger dans le dataset si Groq a bien répondu
-        if groq_result.get("confidence", 0) >= 0.80:
-            try:
-                from core.dataset_builder import save_entry
-                save_entry(command, groq_result, source="groq")
-            except Exception:
-                pass
-
         return groq_result
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -820,18 +811,6 @@ class CommandParser:
                     "response_message": f"Exécution de {tc.function.name}...",
                     "raw": command
                 }
-                # ── Dataset logger [TONY STARK V2] ──────────────────────────────────
-                try:
-                    from config.settings import DATASET_MODE
-                    if DATASET_MODE:
-                        from core.dataset_builder import save_entry
-                        save_entry(
-                            input_text=command,
-                            result=result,
-                            source="groq"
-                        )
-                except Exception:
-                    pass  # Ne jamais bloquer le parsing pour le dataset
                 return result
             except json.JSONDecodeError as e:
                 logger.warning(f"Tool call JSON parse failed: {e}, intent={tc.function.name}, falling back to text response")
@@ -840,18 +819,6 @@ class CommandParser:
 
         raw_json = response.choices[0].message.content.strip()
         result = self._parse_json_response(raw_json, command)
-        # ── Dataset logger [TONY STARK V2] ──────────────────────────────────
-        try:
-            from config.settings import DATASET_MODE
-            if DATASET_MODE:
-                from core.dataset_builder import save_entry
-                save_entry(
-                    input_text=command,
-                    result=result,
-                    source="groq"
-                )
-        except Exception:
-            pass  # Ne jamais bloquer le parsing pour le dataset
         return result
 
     # ──────────────────────────────────────────────────────────────────────────

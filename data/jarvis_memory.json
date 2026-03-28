@@ -1,86 +1,645 @@
 {
-  "last_session": "2026-03-28 11:42",
+  "last_session": "2026-03-28 18:06",
   "preferences": {
     "app_counts": {
-      "chrome": 7
+      "chrome": 14,
+      "bloc-notes": 3
     },
     "favorite_apps": [
-      "chrome"
+      "chrome",
+      "bloc-notes"
     ],
     "folder_counts": {
-      "bureau": 1
+      "E:\\": 1,
+      "C:\\Users\\Public\\Desktop": 1,
+      "Bureau\\JarvisDesktop": 1,
+      "C:\\Users\\USER\\Documents": 2
     },
     "favorite_folders": [
-      "bureau"
-    ]
+      "C:\\Users\\USER\\Documents",
+      "E:\\",
+      "C:\\Users\\Public\\Desktop"
+    ],
+    "volume": 30
   },
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-28 11:42"
+      "learned": "2026-03-28 17:47"
+    },
+    "prenom": {
+      "value": "Christophe",
+      "learned": "2026-03-21 08:30"
+    },
+    "pref_music_travail": {
+      "value": "ma playlist",
+      "learned": "2026-03-21 18:52"
+    },
+    "preference_travail": {
+      "value": "ma playlist",
+      "learned": "2026-03-21 18:52"
+    },
+    "mode_travail": {
+      "value": "ma playlist",
+      "learned": "2026-03-21 18:52"
     }
   },
   "events": {
+    "system": [
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774696128,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774696124,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774696124,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774696123,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774696123,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774696111,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": 14400,
+        "timestamp": 1774105533,
+        "datetime": "2026-03-21 16:05"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": 14400,
+        "timestamp": 1774100929,
+        "datetime": "2026-03-21 14:48"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": 10,
+        "timestamp": 1774095509,
+        "datetime": "2026-03-21 13:18"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774095473,
+        "datetime": "2026-03-21 13:17"
+      },
+      {
+        "intent": "SYSTEM_LOCK",
+        "action": "system_lock",
+        "delay_seconds": null,
+        "timestamp": 1774089333,
+        "datetime": "2026-03-21 11:35"
+      },
+      {
+        "intent": "SYSTEM_TASK_MANAGER",
+        "action": "system_task_manager",
+        "delay_seconds": null,
+        "timestamp": 1774088264,
+        "datetime": "2026-03-21 11:17"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774088183,
+        "datetime": "2026-03-21 11:16"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774088117,
+        "datetime": "2026-03-21 11:15"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774088073,
+        "datetime": "2026-03-21 11:14"
+      },
+      {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "delay_seconds": null,
+        "timestamp": 1774088047,
+        "datetime": "2026-03-21 11:14"
+      },
+      {
+        "intent": "SYSTEM_NETWORK",
+        "action": "system_network",
+        "delay_seconds": null,
+        "timestamp": 1774077807,
+        "datetime": "2026-03-21 08:23"
+      },
+      {
+        "intent": "SYSTEM_LOCK",
+        "action": "system_lock",
+        "delay_seconds": null,
+        "timestamp": 1774077620,
+        "datetime": "2026-03-21 08:20"
+      },
+      {
+        "intent": "SYSTEM_TASK_MANAGER",
+        "action": "system_task_manager",
+        "delay_seconds": null,
+        "timestamp": 1774076481,
+        "datetime": "2026-03-21 08:01"
+      },
+      {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "delay_seconds": null,
+        "timestamp": 1774076041,
+        "datetime": "2026-03-21 07:54"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774075998,
+        "datetime": "2026-03-21 07:53"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774075954,
+        "datetime": "2026-03-21 07:52"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774075930,
+        "datetime": "2026-03-21 07:52"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "delay_seconds": null,
+        "timestamp": 1774071912,
+        "datetime": "2026-03-21 06:45"
+      },
+      {
+        "intent": "SYSTEM_CANCEL_SHUTDOWN",
+        "action": "system_cancel_shutdown",
+        "delay_seconds": null,
+        "timestamp": 1774069209,
+        "datetime": "2026-03-21 06:00"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "timestamp": 1774068724,
+        "datetime": "2026-03-21 05:52"
+      },
+      {
+        "intent": "SYSTEM_CANCEL_SHUTDOWN",
+        "action": "system_cancel_shutdown",
+        "timestamp": 1774068689,
+        "datetime": "2026-03-21 05:51"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "timestamp": 1774068665,
+        "datetime": "2026-03-21 05:51"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774068065,
+        "datetime": "2026-03-21 05:41"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774067998,
+        "datetime": "2026-03-21 05:39"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774067373,
+        "datetime": "2026-03-21 05:29"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "timestamp": 1774067294,
+        "datetime": "2026-03-21 05:28"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774066527,
+        "datetime": "2026-03-21 05:15"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774066426,
+        "datetime": "2026-03-21 05:13"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774066406,
+        "datetime": "2026-03-21 05:13"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065919,
+        "datetime": "2026-03-21 05:05"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065898,
+        "datetime": "2026-03-21 05:04"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065657,
+        "datetime": "2026-03-21 05:00"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774065582,
+        "datetime": "2026-03-21 04:59"
+      },
+      {
+        "intent": "SYSTEM_LOCK",
+        "action": "system_lock",
+        "timestamp": 1774065076,
+        "datetime": "2026-03-21 04:51"
+      },
+      {
+        "intent": "SYSTEM_CANCEL_SHUTDOWN",
+        "action": "system_cancel_shutdown",
+        "timestamp": 1774065035,
+        "datetime": "2026-03-21 04:50"
+      },
+      {
+        "intent": "SYSTEM_SHUTDOWN",
+        "action": "system_shutdown",
+        "timestamp": 1774065014,
+        "datetime": "2026-03-21 04:50"
+      },
+      {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "timestamp": 1774064977,
+        "datetime": "2026-03-21 04:49"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064925,
+        "datetime": "2026-03-21 04:48"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064746,
+        "datetime": "2026-03-21 04:45"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064427,
+        "datetime": "2026-03-21 04:40"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064404,
+        "datetime": "2026-03-21 04:40"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "timestamp": 1774064243,
+        "datetime": "2026-03-21 04:37"
+      }
+    ],
     "app": [
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774694552,
-        "datetime": "2026-03-28 11:42"
+        "timestamp": 1774716474,
+        "datetime": "2026-03-28 17:47"
       },
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774641043,
-        "datetime": "2026-03-27 20:50"
+        "timestamp": 1774710807,
+        "datetime": "2026-03-28 16:13"
       },
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774640872,
-        "datetime": "2026-03-27 20:47"
+        "timestamp": 1774710265,
+        "datetime": "2026-03-28 16:04"
+      },
+      {
+        "name": "chrome",
+        "pid": 12,
+        "args": [],
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
       },
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774639584,
-        "datetime": "2026-03-27 20:26"
+        "timestamp": 1774696128,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "name": "chrome",
+        "pid": 4331,
+        "args": [],
+        "timestamp": 1774696125,
+        "datetime": "2026-03-28 11:08"
       },
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774635439,
-        "datetime": "2026-03-27 19:17"
+        "timestamp": 1774392666,
+        "datetime": "2026-03-24 23:51"
       },
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774598365,
-        "datetime": "2026-03-27 08:59"
+        "timestamp": 1774114485,
+        "datetime": "2026-03-21 18:34"
+      },
+      {
+        "name": "bloc-notes",
+        "pid": 15648,
+        "args": [],
+        "timestamp": 1774091268,
+        "datetime": "2026-03-21 12:07"
       },
       {
         "name": "chrome",
         "pid": null,
         "args": [],
-        "timestamp": 1774574943,
-        "datetime": "2026-03-27 02:29"
+        "timestamp": 1774089632,
+        "datetime": "2026-03-21 11:40"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774078069,
+        "datetime": "2026-03-21 08:27"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774076790,
+        "datetime": "2026-03-21 08:06"
+      },
+      {
+        "name": "Bloc-notes",
+        "pid": 16220,
+        "args": [],
+        "timestamp": 1774076439,
+        "datetime": "2026-03-21 08:00"
+      },
+      {
+        "name": "chrome",
+        "pid": 3664,
+        "args": [],
+        "timestamp": 1774076394,
+        "datetime": "2026-03-21 07:59"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774073880,
+        "datetime": "2026-03-21 07:18"
+      },
+      {
+        "name": "Bloc-notes",
+        "pid": 8196,
+        "args": [],
+        "timestamp": 1774073841,
+        "datetime": "2026-03-21 07:17"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774073688,
+        "datetime": "2026-03-21 07:14"
+      }
+    ],
+    "folder": [
+      {
+        "path": "C:\\Users\\USER\\Documents",
+        "name": "Documents",
+        "is_dir": true,
+        "parent": "C:\\Users\\USER",
+        "timestamp": 1774092045,
+        "datetime": "2026-03-21 12:20"
+      },
+      {
+        "path": "C:\\Users\\USER\\Documents",
+        "name": "Documents",
+        "is_dir": true,
+        "parent": "C:\\Users\\USER",
+        "timestamp": 1774092033,
+        "datetime": "2026-03-21 12:20"
+      },
+      {
+        "path": "Bureau\\JarvisDesktop",
+        "name": "JarvisDesktop",
+        "is_dir": true,
+        "parent": "Bureau",
+        "timestamp": 1774091707,
+        "datetime": "2026-03-21 12:15"
+      },
+      {
+        "path": "C:\\Users\\Public\\Desktop",
+        "name": "Desktop",
+        "is_dir": true,
+        "parent": "C:\\Users\\Public",
+        "timestamp": 1774076664,
+        "datetime": "2026-03-21 08:04"
+      },
+      {
+        "path": "E:\\",
+        "name": "",
+        "is_dir": true,
+        "parent": "E:\\",
+        "timestamp": 1774074151,
+        "datetime": "2026-03-21 07:22"
       }
     ],
     "browser": [
       {
         "intent": "BROWSER_NEW_TAB",
-        "url": "about:blank",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.google.com/search?q=python+tutorial+sur+google",
+        "query": "python tutorial sur google",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
+      {
+        "intent": "BROWSER_OPEN_RESULT",
+        "url": "https://www.aufeminin.com/societe/news-societe/football-3/coupe-du-monde-2026-sept-fois-plus-les-tarifs-exorbitants-des-billets-provoquent-la-colere-des-supporters-ils-passent-a-loffensive-2713268.html",
         "query": "",
         "site": "",
         "tabs": null,
-        "timestamp": 1774641044,
-        "datetime": "2026-03-27 20:50"
+        "timestamp": 1774392762,
+        "datetime": "2026-03-24 23:52"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "",
+        "query": "Coupe du monde 2026",
+        "site": "",
+        "tabs": 8,
+        "timestamp": 1774392729,
+        "datetime": "2026-03-24 23:52"
+      },
+      {
+        "intent": "BROWSER_RELOAD",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774090598,
+        "datetime": "2026-03-21 11:56"
+      },
+      {
+        "intent": "BROWSER_LIST_RESULTS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 0,
+        "timestamp": 1774090468,
+        "datetime": "2026-03-21 11:54"
+      },
+      {
+        "intent": "BROWSER_LIST_RESULTS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 0,
+        "timestamp": 1774090433,
+        "datetime": "2026-03-21 11:53"
+      },
+      {
+        "intent": "BROWSER_NAVIGATE",
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774090178,
+        "datetime": "2026-03-21 11:49"
+      },
+      {
+        "intent": "BROWSER_GO_TO_SITE",
+        "url": "https://www.youtube.com/results?search_query=lofi+music",
+        "query": "lofi music",
+        "site": "youtube",
+        "tabs": null,
+        "timestamp": 1774090132,
+        "datetime": "2026-03-21 11:48"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.google.com/search?q=python+tutorial",
+        "query": "python tutorial",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774090006,
+        "datetime": "2026-03-21 11:46"
+      },
+      {
+        "intent": "BROWSER_BACK",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774089869,
+        "datetime": "2026-03-21 11:44"
+      },
+      {
+        "intent": "BROWSER_RELOAD",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774089808,
+        "datetime": "2026-03-21 11:43"
+      },
+      {
+        "intent": "BROWSER_LIST_TABS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774089763,
+        "datetime": "2026-03-21 11:42"
       },
       {
         "intent": "BROWSER_NEW_TAB",
@@ -88,71 +647,242 @@
         "query": "",
         "site": "",
         "tabs": null,
-        "timestamp": 1774640874,
-        "datetime": "2026-03-27 20:47"
+        "timestamp": 1774089676,
+        "datetime": "2026-03-21 11:41"
       },
       {
-        "intent": "BROWSER_NEW_TAB",
-        "url": "about:blank",
-        "query": "",
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.google.com/search?q=python",
+        "query": "python",
         "site": "",
         "tabs": null,
-        "timestamp": 1774575075,
-        "datetime": "2026-03-27 02:31"
+        "timestamp": 1774078156,
+        "datetime": "2026-03-21 08:29"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.youtube.com/results?search_query=lofi+music",
+        "query": "lofi music",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774077100,
+        "datetime": "2026-03-21 08:11"
+      },
+      {
+        "intent": "BROWSER_LIST_TABS",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774076967,
+        "datetime": "2026-03-21 08:09"
       }
     ],
-    "system": [
+    "macro": [
       {
-        "intent": "SYSTEM_TIME",
-        "action": "system_time",
-        "delay_seconds": null,
-        "timestamp": 1774694615,
-        "datetime": "2026-03-28 11:43"
-      },
-      {
-        "intent": "SYSTEM_INFO",
-        "action": "system_info",
-        "delay_seconds": null,
-        "timestamp": 1774598410,
-        "datetime": "2026-03-27 09:00"
-      },
-      {
-        "intent": "SYSTEM_INFO",
-        "action": "system_info",
-        "delay_seconds": null,
-        "timestamp": 1774598356,
-        "datetime": "2026-03-27 08:59"
-      },
-      {
-        "intent": "SYSTEM_TIME",
-        "action": "system_time",
-        "delay_seconds": null,
-        "timestamp": 1774597007,
-        "datetime": "2026-03-27 08:36"
-      },
-      {
-        "intent": "SYSTEM_INFO",
-        "action": "system_info",
-        "delay_seconds": null,
-        "timestamp": 1774596983,
-        "datetime": "2026-03-27 08:36"
+        "name": "",
+        "action": "list",
+        "steps": null,
+        "timestamp": 1774077499,
+        "datetime": "2026-03-21 08:18"
       }
     ],
-    "folder": [
+    "network": [
       {
-        "path": "bureau",
-        "name": "bureau",
-        "is_dir": true,
+        "intent": "BLUETOOTH_ENABLE",
+        "ssid": "",
+        "action": "bluetooth_enable",
+        "timestamp": 1774190230,
+        "datetime": "2026-03-22 15:37"
+      },
+      {
+        "intent": "WIFI_ENABLE",
+        "ssid": "",
+        "action": "wifi_enable",
+        "timestamp": 1774190196,
+        "datetime": "2026-03-22 15:36"
+      },
+      {
+        "intent": "WIFI_ENABLE",
+        "ssid": "",
+        "action": "wifi_enable",
+        "timestamp": 1774190140,
+        "datetime": "2026-03-22 15:35"
+      },
+      {
+        "intent": "WIFI_DISABLE",
+        "ssid": "",
+        "action": "wifi_disable",
+        "timestamp": 1774089593,
+        "datetime": "2026-03-21 11:39"
+      },
+      {
+        "intent": "BLUETOOTH_ENABLE",
+        "ssid": "",
+        "action": "bluetooth_enable",
+        "timestamp": 1774089534,
+        "datetime": "2026-03-21 11:38"
+      },
+      {
+        "intent": "NETWORK_INFO",
+        "ssid": "",
+        "action": "network_info",
+        "timestamp": 1774089495,
+        "datetime": "2026-03-21 11:38"
+      },
+      {
+        "intent": "WIFI_LIST",
+        "ssid": "",
+        "action": "wifi_list",
+        "timestamp": 1774089397,
+        "datetime": "2026-03-21 11:36"
+      },
+      {
+        "intent": "BLUETOOTH_DISABLE",
+        "ssid": "",
+        "action": "bluetooth_disable",
+        "timestamp": 1774077894,
+        "datetime": "2026-03-21 08:24"
+      },
+      {
+        "intent": "BLUETOOTH_ENABLE",
+        "ssid": "",
+        "action": "bluetooth_enable",
+        "timestamp": 1774077850,
+        "datetime": "2026-03-21 08:24"
+      },
+      {
+        "intent": "WIFI_LIST",
+        "ssid": "",
+        "action": "wifi_list",
+        "timestamp": 1774077763,
+        "datetime": "2026-03-21 08:22"
+      }
+    ],
+    "screen": [
+      {
+        "intent": "SCREEN_BRIGHTNESS",
+        "action": "brightness",
+        "timestamp": 1774106073,
+        "datetime": "2026-03-21 16:14"
+      },
+      {
+        "intent": "SCREEN_BRIGHTNESS",
+        "action": "brightness",
+        "timestamp": 1774091227,
+        "datetime": "2026-03-21 12:07"
+      },
+      {
+        "intent": "SCREEN_BRIGHTNESS",
+        "action": "brightness",
+        "timestamp": 1774077980,
+        "datetime": "2026-03-21 08:26"
+      },
+      {
+        "intent": "SCREEN_CAPTURE",
+        "action": "capture",
+        "timestamp": 1774077937,
+        "datetime": "2026-03-21 08:25"
+      }
+    ],
+    "search": [
+      {
+        "query": "comprendre 023.docx",
+        "results": [
+          {
+            "name": "comprendre 023.docx",
+            "path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
+            "resolved_path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
+            "parent": "C:\\Users\\USER\\Documents",
+            "extension": ".docx",
+            "size": 25184,
+            "size_str": "24.6 KB",
+            "modified": "2025-08-14 04:31",
+            "created": "2025-09-02 13:24",
+            "is_dir": false
+          }
+        ],
+        "count": 1,
+        "type": "file",
+        "timestamp": 1774092093,
+        "datetime": "2026-03-21 12:21"
+      }
+    ],
+    "file": [
+      {
+        "path": "E:\\docs\\contrat.pdf",
+        "name": "E:\\docs\\contrat.pdf",
+        "is_dir": false,
         "parent": ".",
-        "timestamp": 1774598432,
-        "datetime": "2026-03-27 09:00"
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
+      {
+        "path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
+        "name": "comprendre 023.docx",
+        "is_dir": false,
+        "parent": "C:\\Users\\USER\\Documents",
+        "timestamp": 1774092093,
+        "datetime": "2026-03-21 12:21"
+      }
+    ],
+    "audio": [
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 30,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774188243,
+        "datetime": "2026-03-22 15:04"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 50,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116573,
+        "datetime": "2026-03-21 19:09"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 30,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116522,
+        "datetime": "2026-03-21 19:08"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 50,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116342,
+        "datetime": "2026-03-21 19:05"
+      },
+      {
+        "intent": "AUDIO_VOLUME_SET",
+        "volume": 80,
+        "track": "",
+        "action": "volume_set",
+        "timestamp": 1774116060,
+        "datetime": "2026-03-21 19:01"
+      }
+    ],
+    "document": [
+      {
+        "path": "E:\\docs\\contrat.pdf",
+        "name": "E:\\docs\\contrat.pdf",
+        "action": "search_word",
+        "keyword": "permis",
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
       }
     ]
   },
   "stats": {
-    "session_count": 21,
-    "total_commands": 16
+    "session_count": 131,
+    "total_commands": 111
   },
-  "session_count": 21,
-  "_saved_at": "2026-03-28 11:43:35"
+  "session_count": 131,
+  "_saved_at": "2026-03-28 18:06:24"
 }

@@ -16,10 +16,10 @@ from pathlib import Path
 # Ajouter le dossier racine au PYTHONPATH
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config.settings import check_config
+from config.settings import check_config, TELEGRAM_BOT_TOKEN
 from config.logger import get_logger
 from core.agent import Agent
-from core.telegram_bot import get_telegram_bot
+from core.telegram_bot import TelegramBot
 
 logger = get_logger("main")
 
@@ -43,14 +43,14 @@ def main():
     agent = Agent()
 
     # Intégration Telegram (start/polling en production)
-    telegram_bot = get_telegram_bot()
-    if telegram_bot and telegram_bot.is_connected:
-        telegram_bot.set_command_handler(lambda text: agent.handle_command(text, source="telegram"))
-        telegram_bot.start_polling()
+    telegram_bot = None
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN != "changeme":
+        telegram_bot = TelegramBot(token=TELEGRAM_BOT_TOKEN, agent=agent)
+        telegram_bot.start()
         logger.info("Telegram : daemon poll démarre")
         print("📡 Telegram : démarré (mode commande distante).")
     else:
-        logger.info("Telegram : non configuré ou erreur de connexion")
+        logger.info("Telegram : non configuré ou erreur de connexion (token manquant)")
 
     # TODO Semaine 6 : lancer aussi le WebSocket en parallèle
     # from communication.websocket_client import WebSocketClient
@@ -64,7 +64,7 @@ def main():
         logger.info("Interruption clavier reçue, arrêt en cours...")
     finally:
         if telegram_bot:
-            telegram_bot.stop_polling()
+            telegram_bot.stop()
             logger.info("Telegram : polling arrêté")
 
 
