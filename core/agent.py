@@ -18,6 +18,11 @@ from core.jarvis_memory import JarvisMemory
 
 logger = get_logger(__name__)
 
+# Pre-compiled pattern used to detect log lines leaked into stdin.
+_LOG_LINE_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s*\|\s*(INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL)"
+)
+
 MAX_HISTORY = 8   # Nombre d'échanges conservés en mémoire
 
 
@@ -519,6 +524,11 @@ class Agent:
                     "data": {"mode": "knowledge_qa", "answered_by": parsed.get("source", "groq")},
                 }
             if p_intent not in ("UNKNOWN", "INCOMPLETE", ""):
+                # Apply the same context overrides as the main command path so
+                # that, e.g., "non, ouvre un nouvel onglet" correctly becomes
+                # BROWSER_NEW_TAB instead of APP_OPEN.
+                p_params = self._apply_context_to_params(reply, p_intent, p_params)
+                p_intent, p_params = self._override_intent_with_context(reply, p_intent, p_params)
                 return self.executor.execute(
                     p_intent, p_params,
                     raw_command=reply, agent=self
@@ -1794,6 +1804,11 @@ class Agent:
                     self.stop()
                     break
 
+                # Skip log lines that leaked into stdin from background threads
+                # (e.g. Telegram bot error messages printed while input() waits).
+                if self._looks_like_log_entry(command):
+                    continue
+
                 result     = self.handle_command(command)
                 intent     = result.get("_intent", "")
                 confidence = result.get("_confidence", 0.0)
@@ -1851,3 +1866,12 @@ class Agent:
                 if after:
                     return after
         return ""
+
+    @staticmethod
+    def _looks_like_log_entry(text: str) -> bool:
+        """
+        Détecte si le texte ressemble à une ligne de log qui a été injectée
+        dans le flux stdin depuis un thread d'arrière-plan (ex : Telegram bot).
+        Format typique : '2026-03-28 11:42:58 | ERROR | core.xxx | message'
+        """
+        return bool(_LOG_LINE_RE.search(text))

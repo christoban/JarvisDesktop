@@ -1,8 +1,8 @@
 {
-  "last_session": "2026-03-24 23:47",
+  "last_session": "2026-03-28 11:09",
   "preferences": {
     "app_counts": {
-      "chrome": 8,
+      "chrome": 11,
       "bloc-notes": 3
     },
     "favorite_apps": [
@@ -25,7 +25,7 @@
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-24 23:51"
+      "learned": "2026-03-28 11:09"
     },
     "prenom": {
       "value": "Christophe",
@@ -46,6 +46,48 @@
   },
   "events": {
     "system": [
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774696128,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774696124,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774696124,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_PROCESSES",
+        "action": "system_processes",
+        "delay_seconds": null,
+        "timestamp": 1774696123,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_DISK",
+        "action": "system_disk",
+        "delay_seconds": null,
+        "timestamp": 1774696123,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "intent": "SYSTEM_INFO",
+        "action": "system_info",
+        "delay_seconds": null,
+        "timestamp": 1774696111,
+        "datetime": "2026-03-28 11:08"
+      },
       {
         "intent": "SYSTEM_SHUTDOWN",
         "action": "system_shutdown",
@@ -321,6 +363,27 @@
     "app": [
       {
         "name": "chrome",
+        "pid": 12,
+        "args": [],
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774696128,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "name": "chrome",
+        "pid": 4331,
+        "args": [],
+        "timestamp": 1774696125,
+        "datetime": "2026-03-28 11:08"
+      },
+      {
+        "name": "chrome",
         "pid": null,
         "args": [],
         "timestamp": 1774392666,
@@ -440,6 +503,24 @@
       }
     ],
     "browser": [
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "",
+        "query": "",
+        "site": "",
+        "tabs": 1,
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "https://www.google.com/search?q=python+tutorial+sur+google",
+        "query": "python tutorial sur google",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
       {
         "intent": "BROWSER_OPEN_RESULT",
         "url": "https://www.aufeminin.com/societe/news-societe/football-3/coupe-du-monde-2026-sept-fois-plus-les-tarifs-exorbitants-des-billets-provoquent-la-colere-des-supporters-ils-passent-a-loffensive-2713268.html",
@@ -708,6 +789,14 @@
     ],
     "file": [
       {
+        "path": "E:\\docs\\contrat.pdf",
+        "name": "E:\\docs\\contrat.pdf",
+        "is_dir": false,
+        "parent": ".",
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      },
+      {
         "path": "C:\\Users\\USER\\Documents\\comprendre 023.docx",
         "name": "comprendre 023.docx",
         "is_dir": false,
@@ -757,12 +846,22 @@
         "timestamp": 1774116060,
         "datetime": "2026-03-21 19:01"
       }
+    ],
+    "document": [
+      {
+        "path": "E:\\docs\\contrat.pdf",
+        "name": "E:\\docs\\contrat.pdf",
+        "action": "search_word",
+        "keyword": "permis",
+        "timestamp": 1774696140,
+        "datetime": "2026-03-28 11:09"
+      }
     ]
   },
   "stats": {
-    "session_count": 68,
-    "total_commands": 95
+    "session_count": 122,
+    "total_commands": 108
   },
-  "session_count": 68,
-  "_saved_at": "2026-03-24 23:52:42"
+  "session_count": 122,
+  "_saved_at": "2026-03-28 11:09:00"
 }
