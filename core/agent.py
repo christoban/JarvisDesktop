@@ -1,7 +1,7 @@
 """
 agent.py — Cerveau de l'agent PC
 SEMAINE 4+ : Pipeline IA + Mémoire conversationnelle.
-
+Ndzana Christophe
 Mémoire conversationnelle :
   - Jarvis garde en mémoire les N derniers échanges
   - Si la commande est ambiguë, Groq reçoit le contexte pour la résoudre
