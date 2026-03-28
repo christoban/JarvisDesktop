@@ -57,12 +57,14 @@ class PlaylistManager:
         - correspondance exacte (insensible à la casse via normalisation)
         - alias avec/sans préfixe "playlist "
         - cas naturel "de X" -> essaie aussi "playlist de X"
+        - fuzzy matching : substring match (ex: "gospel" → "gospel hit")
         - pas de matching flou large pour éviter les suppressions accidentelles
         """
         name = (raw_name or "").strip().lower()
         if not name:
             return None
 
+        # Étape 1 : correspondance exacte
         candidates = [name]
         if name.startswith("playlist "):
             candidates.append(name[len("playlist "):].strip())
@@ -74,6 +76,15 @@ class PlaylistManager:
         for c in candidates:
             if c in self._playlists:
                 return c
+
+        # Étape 2 : substring match (fuzzy)
+        # Si rien ne matche exactement, essayer un match partiel
+        for playlist_key in self._playlists.keys():
+            # Match si le nom utilisateur est dans la clé
+            if name in playlist_key or playlist_key in name:
+                logger.debug(f"Fuzzy match: '{name}' → '{playlist_key}'")
+                return playlist_key
+
         return None
 
     def create_playlist(self, name: str) -> dict:

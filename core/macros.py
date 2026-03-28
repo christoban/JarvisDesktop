@@ -272,10 +272,11 @@ class MacroManager:
     def _execute_step(self, cmd, agent) -> dict:
         """
         [P3] Exécute une étape de macro en mode direct si possible.
+        [TONY STARK V2] Support des variables dynamiques {{variable}}.
 
         Priorité :
           1. dict avec use_pref → résoudre préférence + execute direct
-          2. dict avec intent   → execute direct (bypass Groq)
+          2. dict avec intent   → execute direct (bypass Groq) + interpolate vars
           3. str connue         → compile en dict + execute direct
           4. str inconnue       → agent.handle_command() (Groq)
         """
@@ -284,7 +285,10 @@ class MacroManager:
             intent = cmd.get("intent", "")
             params = dict(cmd.get("params", {}) or {})
 
-            # Résoudre la préférence si indiquée
+            # [TONY STARK V2] Interpoler les variables dynamiques {{key}}
+            params = self._interpolate_variables(params, agent)
+
+            # Résoudre la préférence si indiquée (recall_fact)
             pref_key = cmd.get("use_pref", "")
             if pref_key and hasattr(agent, "_memory"):
                 try:
@@ -293,7 +297,32 @@ class MacroManager:
                         params["name"] = pref_value
                         logger.info(f"  → Préférence '{pref_key}' résolue : '{pref_value}'")
                 except Exception:
-                    pass  # Fallback sur params par défaut
+                    pass
+
+            # [TONY STARK V2] Résolution RAG — variables dynamiques sémantiques
+            # Ex: {"use_rag": "musique de travail"} → query_memory → "ma playlist"
+            rag_query = cmd.get("use_rag", "")
+            if rag_query and hasattr(agent, "_memory"):
+                try:
+                    rag_results = agent._memory.query_memory(rag_query, limit=1)
+                    if rag_results:
+                        # Extraire la valeur du résultat RAG (format "key = value")
+                        raw_result = rag_results[0]
+                        if " = " in raw_result:
+                            rag_value = raw_result.split(" = ", 1)[1].strip()
+                        else:
+                            rag_value = raw_result.strip()
+                        if rag_value and intent == "MUSIC_PLAYLIST_PLAY":
+                            params["name"] = rag_value
+                        elif rag_value:
+                            # Injecter dans le premier paramètre str disponible
+                            for pk, pv in params.items():
+                                if isinstance(pv, str) and not pv:
+                                    params[pk] = rag_value
+                                    break
+                        logger.info(f"  → RAG '{rag_query}' → '{rag_value}'")
+                except Exception as e:
+                    logger.debug(f"RAG résolution ignorée : {e}")
 
             if intent:
                 try:
@@ -323,6 +352,40 @@ class MacroManager:
         # ── Cas 4 : fallback Groq (texte non compilable) ─────────────────────
         cmd_text = cmd if isinstance(cmd, str) else cmd.get("label", str(cmd))
         return agent.handle_command(cmd_text)
+
+    def _interpolate_variables(self, params: dict, agent) -> dict:
+        """
+        [TONY STARK V2] Interpole les variables dynamiques dans les params.
+        Support de {{variable_name}} qui seront remplacées par des valeurs
+        depuis la mémoire RAG de l'agent.
+
+        Exemples :
+          "name": "{{pref_music_travail}}"  → "ma playlist de lofi"
+          "level": "{{preferred_volume}}"   → "70"
+        """
+        if not agent or not hasattr(agent, "_memory"):
+            return params
+
+        result = {}
+        for key, value in params.items():
+            if isinstance(value, str) and "{{" in value and "}}" in value:
+                # Parser {{variable_name}} et remplacer
+                import re
+                def replace_var(match):
+                    var_name = match.group(1).strip()
+                    try:
+                        resolved = agent._memory.recall_fact(var_name)
+                        return str(resolved) if resolved else value
+                    except Exception:
+                        return value
+
+                result[key] = re.sub(r"\{\{(.+?)\}\}", replace_var, value)
+                if result[key] != value:
+                    logger.info(f"  → Interpolation : {key} = {result[key]}")
+            else:
+                result[key] = value
+
+        return result
 
     def save_macro(self, name: str, commands: list,
                    description: str = "",

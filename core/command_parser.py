@@ -37,6 +37,7 @@ from config.logger import get_logger
 from config.settings import (
     GROQ_API_KEY,
     GROQ_MODEL_NAME,
+    USE_TOOL_CALLS,
 )
 
 logger = get_logger(__name__)
@@ -45,6 +46,107 @@ logger = get_logger(__name__)
 # Les réponses longues (listes de fichiers, rapport système) sont tronquées
 # pour ne pas polluer le contexte JSON strict du parser.
 _MAX_ASSISTANT_MSG_LEN = 200
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  CONVERSION INTENTS → TOOL SCHEMAS (TONY STARK V2)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def convert_intents_to_tools(enabled: bool = None) -> list:
+    """
+    Convertit le catalogue INTENTS en tool schemas JSON pour Groq.
+    
+    TONY STARK V2 : Support des tool_calls natifs de Groq pour une
+    meilleure robustesse et précision.
+    
+    Si enabled=False ou USE_TOOL_CALLS=False, retourne [] (pas de tools).
+    LIMITATION : Groq accepte max 128 outils. On ne génère que les 50 
+    outils non-système pour économiser les tokens (énorme problème).
+    """
+    if enabled is None:
+        enabled = USE_TOOL_CALLS
+    
+    if not enabled:
+        return []
+    
+    tools = []
+    
+    # Liste des intents critiques à inclure (les + utilisés)
+    critical_intents = {
+        "APP_OPEN", "APP_CLOSE", "BROWSER_SEARCH", "BROWSER_OPEN", "BROWSER_NEW_TAB",
+        "FILE_OPEN", "FILE_SEARCH", "FOLDER_LIST", "FILE_DELETE",
+        "AUDIO_PLAY", "AUDIO_VOLUME_SET", "AUDIO_MUTE",
+        "MUSIC_PLAY", "MUSIC_PAUSE", "MUSIC_RESUME", "MUSIC_NEXT", "MUSIC_PREV",
+        "MUSIC_PLAYLIST_PLAY", "MUSIC_PLAYLIST_ADD_SONG", "MUSIC_PLAYLIST_CREATE",
+        "SYSTEM_SHUTDOWN", "SYSTEM_RESTART", "POWER_SLEEP",
+        "SCREEN_BRIGHTNESS", "SCREEN_CAPTURE", "SCREEN_OFF",
+        "WINDOW_CLOSE", "WINDOW_LIST",
+        "SYSTEM_INFO", "SYSTEM_TIME", "SYSTEM_PROCESSES",
+        "WIFI_LIST", "WIFI_CONNECT", "BLUETOOTH_ENABLE",
+        "KNOWLEDGE_QA", "HELP",
+    }
+    
+    for intent_name, intent_config in INTENTS.items():
+        if intent_name == "UNKNOWN":
+            continue
+        
+        # Ne générer les tools que pour les intents critiques
+        # (+ économiser énormément de tokens)
+        if intent_name not in critical_intents:
+            continue
+        
+        tool = {
+            "type": "function",
+            "function": {
+                "name": intent_name,
+                "description": intent_config.get("desc", ""),
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            }
+        }
+        
+        # Construire les propriétés depuis les params
+        params = intent_config.get("params", {})
+        for param_name, param_type_str in params.items():
+            param_type_str_lower = str(param_type_str).lower().strip()
+            is_optional = "optionnel" in param_type_str_lower or "optional" in param_type_str_lower
+            
+            # Déterminer le type JSON Schema
+            json_type = "string"  # Default
+            if "int" in param_type_str_lower:
+                json_type = "integer"
+            elif "float" in param_type_str_lower or "number" in param_type_str_lower:
+                json_type = "number"
+            elif "bool" in param_type_str_lower:
+                json_type = "boolean"
+            elif "list" in param_type_str_lower or "array" in param_type_str_lower:
+                json_type = "array"
+            
+            prop = {
+                "type": json_type,
+                "description": f"Parameter {param_name}"
+            }
+            
+            # Pour les arrays, préciser le type des items
+            if json_type == "array":
+                if "int" in param_type_str_lower:
+                    prop["items"] = {"type": "integer"}
+                else:
+                    prop["items"] = {"type": "string"}
+            
+            tool["function"]["parameters"]["properties"][param_name] = prop
+            
+            # Ajouter aux required si pas optionnel
+            if not is_optional:
+                tool["function"]["parameters"]["required"].append(param_name)
+        
+        tools.append(tool)
+    
+    logger.info(f"Generated {len(tools)} critical tools for Groq (max {len(critical_intents)})")
+    return tools
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -156,6 +258,7 @@ INTENTS = {
     "BROWSER_CHECK_LOGIN":    {"desc": "Vérifier l'état de connexion à un site",    "params": {"site": "str"}},
     "BROWSER_EXTRACT_SUMMARY":{"desc": "Résumé structuré du contenu de la page",    "params": {}},
     "BROWSER_COMPOSE_EMAIL":  {"desc": "Composer et envoyer un email",              "params": {"to": "str optionnel", "subject": "str optionnel", "body": "str optionnel"}},
+    "TELEGRAM_SEND":          {"desc": "Envoyer un message via Telegram",           "params": {"to": "str", "message": "str"}},
     "BROWSER_MULTISTEP":      {"desc": "Exécuter plusieurs commandes en séquence",  "params": {"steps": "list[str]"}},
 
     # ── Audio ─────────────────────────────────────────────────────────────────
@@ -209,6 +312,47 @@ INTENTS = {
     "DOC_READ":        {"desc": "Lire un document Word ou PDF",              "params": {"path": "str"}},
     "DOC_SUMMARIZE":   {"desc": "Résumer un document",                       "params": {"path": "str"}},
     "DOC_SEARCH_WORD": {"desc": "Chercher un mot dans un document",          "params": {"path": "str", "keyword": "str"}},
+    "DOC_QA":          {"desc": "Poser une question sur un document",        "params": {"path": "str", "question": "str"}},
+    # ── Word (Semaine 10) ─────────────────────────────────────────────────────
+    "WORD_CREATE":     {
+        "desc": "Créer un document Word structuré",
+        "params": {"title": "str", "sections": "list optionnel", "content": "str optionnel",
+                   "filename": "str optionnel", "style": "str optionnel"}
+    },
+    "WORD_EDIT":       {
+        "desc": "Modifier un document Word existant (ajouter ou remplacer texte)",
+        "params": {"path": "str", "action": "str (append|replace|add_heading)",
+                   "content": "str optionnel", "search": "str optionnel", "replace": "str optionnel"}
+    },
+    "WORD_EXPORT_PDF": {"desc": "Exporter un .docx en PDF",                 "params": {"path": "str"}},
+    "CV_CREATE":       {
+        "desc": "Créer un CV professionnel complet au format Word",
+        "params": {"name": "str", "title": "str optionnel", "email": "str optionnel",
+                   "phone": "str optionnel", "summary": "str optionnel",
+                   "experience": "list optionnel", "education": "list optionnel",
+                   "skills": "dict optionnel", "languages": "list optionnel"}
+    },
+    "REPORT_CREATE":   {
+        "desc": "Créer un rapport Word professionnel",
+        "params": {"title": "str", "content": "str ou dict", "filename": "str optionnel"}
+    },
+    # ── Excel (Semaine 10) ────────────────────────────────────────────────────
+    "EXCEL_CREATE":    {
+        "desc": "Créer un fichier Excel avec données",
+        "params": {"title": "str", "headers": "list optionnel", "rows": "list optionnel",
+                   "sheets": "list optionnel", "filename": "str optionnel"}
+    },
+    "EXCEL_READ":      {"desc": "Lire un fichier Excel",                     "params": {"path": "str", "sheet": "str optionnel"}},
+    "EXCEL_REPORT":    {
+        "desc": "Générer un rapport Excel depuis des données",
+        "params": {"title": "str", "data": "list", "filename": "str optionnel"}
+    },
+    # ── PDF (Semaine 10) ──────────────────────────────────────────────────────
+    "PDF_EXTRACT":     {"desc": "Extraire texte ou pages d'un PDF",          "params": {"path": "str", "pages": "str optionnel", "mode": "str optionnel"}},
+    "PDF_MERGE":       {"desc": "Fusionner plusieurs PDF en un seul",        "params": {"paths": "list", "output": "str optionnel"}},
+    "PDF_SPLIT":       {"desc": "Découper un PDF",                           "params": {"path": "str", "split_at": "int ou list optionnel"}},
+    "PDF_SEARCH":      {"desc": "Rechercher un mot dans un PDF",             "params": {"path": "str", "keyword": "str"}},
+    "PDF_INFO":        {"desc": "Obtenir les informations/métadonnées d'un PDF", "params": {"path": "str"}},
 
     # ── Écran ─────────────────────────────────────────────────────────────────
     "SCREEN_CAPTURE":      {"desc": "Capture d'écran",                       "params": {}},
@@ -216,6 +360,13 @@ INTENTS = {
     "SCREEN_BRIGHTNESS":   {"desc": "Régler la luminosité",                  "params": {"level": "int 0-100"}},
     "SCREEN_INFO":         {"desc": "Infos sur l'écran (résolution, etc.)",  "params": {}},
     "SCREEN_RECORD":       {"desc": "Enregistrer l'écran",                   "params": {}},
+
+    # ── Vision (Semaine 13) ────────────────────────────────────────────────────
+    "VISION_READ_SCREEN":    {"desc": "Lire le texte à l'écran (OCR)",          "params": {}},
+    "VISION_CLICK_TEXT":     {"desc": "Cliquer sur un élément par son texte",    "params": {"text": "str", "fuzzy": "bool optionnel"}},
+    "VISION_SUMMARIZE":      {"desc": "Résumer le contenu de l'écran",          "params": {}},
+    "VISION_FIND_BUTTON":    {"desc": "Trouver un bouton à l'écran",             "params": {"button": "str"}},
+    "VISION_EXTRACT_LINKS":  {"desc": "Extraire les liens de l'écran",          "params": {}},
 
     # ── Historique / Macros ───────────────────────────────────────────────────
     "REPEAT_LAST":    {"desc": "Répéter la dernière commande",               "params": {}},
@@ -227,19 +378,78 @@ INTENTS = {
     "MACRO_SAVE":     {"desc": "Créer/sauvegarder une macro",                "params": {"name": "str", "commands": "list"}},
     "MACRO_DELETE":   {"desc": "Supprimer une macro",                        "params": {"name": "str"}},
 
+    # ── Workflows (Semaine 12) ──────────────────────────────────────────────────
+    "WORKFLOW_RUN":        {"desc": "Exécuter un workflow automatisé multi-apps", "params": {"name": "str", "context": "dict optionnel"}},
+    "WORKFLOW_LIST":      {"desc": "Lister les workflows disponibles",         "params": {}},
+    "WORKFLOW_REGISTER":  {"desc": "Créer un nouveau workflow",               "params": {"name": "str", "steps": "list", "description": "str optionnel"}},
+
+    # ── Macro Recording (Semaine 12) ──────────────────────────────────────────
+    "RECORD_START":  {"desc": "Démarrer l'enregistrement d'une macro",    "params": {"name": "str"}},
+    "RECORD_STOP":   {"desc": "Arrêter l'enregistrement et sauvegarder",  "params": {"name": "str optionnel", "description": "str optionnel"}},
+
     "GREETING":     {"desc": "Salutation ou message d'accueil",              "params": {}},
     "MEMORY_SHOW":  {"desc": "Afficher ce dont Jarvis se souvient",          "params": {}},
     "PREFERENCE_SET": {
         "desc": "Mémoriser une préférence utilisateur (playlist de travail, app favorite, volume préféré, etc.)",
         "params": {"label": "str (ex: travail, codage, détente)", "value": "str (valeur associée)", "category": "str optionnel (music, app, volume...)"},
     },
+    "MULTI_ACTION":  {
+        "desc": "Exécuter plusieurs actions en séquence dans une seule commande composée",
+        "params": {
+            "actions": "list de {intent: str, params: dict} — max 4 actions",
+        },
+    },
     "KNOWLEDGE_QA": {"desc": "Question de connaissance générale, réponse directe sans action système", "params": {}},
     "INCOMPLETE":   {"desc": "Commande incomplète — paramètre manquant",     "params": {"missing": "str", "suggested_intent": "str"}},
+
+    # ── Email (Outlook) ────────────────────────────────────────────────────────
+    "EMAIL_INBOX":         {"desc": "Lire la boîte de réception",             "params": {"limit": "int optionnel", "unread_only": "bool optionnel"}},
+    "EMAIL_SEND":          {"desc": "Envoyer un email",                      "params": {"to": "str", "subject": "str optionnel", "body": "str optionnel", "cc": "str optionnel"}},
+    "EMAIL_REPLY":         {"desc": "Répondre à un email",                   "params": {"email_id": "str", "body": "str optionnel", "to_all": "bool optionnel"}},
+    "EMAIL_FORWARD":       {"desc": "Transférer un email",                   "params": {"email_id": "str", "to": "str", "body": "str optionnel"}},
+    "EMAIL_SEARCH":         {"desc": "Rechercher dans les emails",           "params": {"query": "str", "folder": "str optionnel"}},
+    "EMAIL_MARK_READ":      {"desc": "Marquer un email comme lu",             "params": {"email_id": "str"}},
+    "EMAIL_MARK_UNREAD":    {"desc": "Marquer un email comme non lu",        "params": {"email_id": "str"}},
+    "EMAIL_DRAFT":         {"desc": "Créer un brouillon d'email",           "params": {"to": "str optionnel", "subject": "str optionnel", "body": "str optionnel"}},
+    "EMAIL_ATTACH_FILE":    {"desc": "Joindre un fichier à un email",       "params": {"email_id": "str", "file_path": "str"}},
+    "EMAIL_SUMMARY":        {"desc": "Résumé des emails non lus",             "params": {}},
+    "EMAIL_IMPORTANT":     {"desc": "Afficher les emails importants",        "params": {"hours": "int optionnel"}},
+
+    # ── Telegram ───────────────────────────────────────────────────────────────
+    "TELEGRAM_SEND":        {"desc": "Envoyer un message via Telegram",     "params": {"message": "str", "chat_id": "str optionnel"}},
+    "TELEGRAM_NOTIFY":      {"desc": "Envoyer une notification Telegram",   "params": {"title": "str optionnel", "message": "str"}},
+    "TELEGRAM_ALERT":       {"desc": "Envoyer une alerte systeme Telegram", "params": {"alert_type": "str", "message": "str"}},
+    "TELEGRAM_STATUS":      {"desc": "Verifier le statut du bot Telegram",    "params": {}},
 
     # ── Aide / Inconnu ────────────────────────────────────────────────────────
     "HELP":    {"desc": "Afficher l'aide et les commandes disponibles",      "params": {}},
     "UNKNOWN": {"desc": "Intention non reconnue",                            "params": {}},
 }
+
+# Alias pour compatibilité — utilisé dans les tests
+INTENT_SCHEMA = INTENTS
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  FORMATTED FEW-SHOT EXAMPLES HELPER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def format_few_shot_examples(examples: list) -> list:
+    """
+    Convertit une liste de tuples (user_command, json_response) en messages
+    format Groq pour les few-shot examples.
+    
+    Args:
+        examples: liste de (user_command_str, json_response_str)
+        
+    Returns:
+        Liste de dicts {"role": "user|assistant", "content": "..."}
+    """
+    messages = []
+    for user_command, json_response in examples:
+        messages.append({"role": "user", "content": user_command})
+        messages.append({"role": "assistant", "content": json_response})
+    return messages
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -307,6 +517,48 @@ FEW_SHOT_EXAMPLES = [
      '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"},"confidence":0.90,"response_message":"Je lance la playlist."}'),
     ("joue alors cette playlist maintenant",
      '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"},"confidence":0.95,"response_message":"Je lance la playlist maintenant."}'),
+    # SEMAINE 10 — Word / Excel / PDF
+    # CV
+    ("cree un cv professionnel pour moi",
+     '{"intent":"CV_CREATE","params":{"name":"","title":"","email":"","phone":""},"confidence":0.98,"response_message":"Je vais créer ton CV. Commence par ton nom complet."}'),
+    ("genere mon cv avec mes infos",
+     '{"intent":"CV_CREATE","params":{},"confidence":0.97,"response_message":"Pour créer ton CV, j\'ai besoin de tes informations."}'),
+    ("cree un cv pour christophe ingenieur logiciel email chris@email.com",
+     '{"intent":"CV_CREATE","params":{"name":"Christophe","title":"Ingénieur Logiciel","email":"chris@email.com"},"confidence":0.99,"response_message":"Je crée le CV de Christophe."}'),
+    # Word
+    ("cree un document word avec le titre rapport et le contenu bilan du mois",
+     '{"intent":"WORD_CREATE","params":{"title":"Rapport","content":"Bilan du mois"},"confidence":0.98,"response_message":"Je crée le document Word."}'),
+    ("exporte ce fichier word en pdf",
+     '{"intent":"WORD_EXPORT_PDF","params":{"path":""},"confidence":0.97,"response_message":"Export PDF en cours."}'),
+    ("cree un rapport word sur les ventes du mois",
+     '{"intent":"REPORT_CREATE","params":{"title":"Rapport des ventes du mois","content":""},"confidence":0.97,"response_message":"Je génère le rapport Word."}'),
+    # Excel
+    ("cree un tableau excel avec les colonnes nom prenom age",
+     '{"intent":"EXCEL_CREATE","params":{"title":"Tableau","headers":["Nom","Prénom","Âge"],"rows":[]},"confidence":0.98,"response_message":"Je crée le fichier Excel."}'),
+    ("lis le fichier excel budget.xlsx",
+     '{"intent":"EXCEL_READ","params":{"path":"budget.xlsx"},"confidence":0.99,"response_message":"Lecture du fichier Excel."}'),
+    ("genere un rapport excel avec ces donnees",
+     '{"intent":"EXCEL_REPORT","params":{"title":"Rapport","data":[]},"confidence":0.95,"response_message":"Génération du rapport Excel."}'),
+    # PDF
+    ("extrais les pages 1 a 5 du fichier rapport.pdf",
+     '{"intent":"PDF_EXTRACT","params":{"path":"rapport.pdf","pages":"1-5","mode":"file"},"confidence":0.99,"response_message":"Extraction des pages 1 à 5."}'),
+    ("fusionne les fichiers doc1.pdf et doc2.pdf",
+     '{"intent":"PDF_MERGE","params":{"paths":["doc1.pdf","doc2.pdf"]},"confidence":0.99,"response_message":"Fusion des PDF en cours."}'),
+    ("decoupe le pdf en deux a partir de la page 10",
+     '{"intent":"PDF_SPLIT","params":{"path":"","split_at":10},"confidence":0.97,"response_message":"Découpe du PDF à la page 10."}'),
+    ("cherche le mot budget dans rapport.pdf",
+     '{"intent":"PDF_SEARCH","params":{"path":"rapport.pdf","keyword":"budget"},"confidence":0.99,"response_message":"Recherche dans le PDF."}'),
+    ("donne moi les infos du fichier contrat.pdf",
+     '{"intent":"PDF_INFO","params":{"path":"contrat.pdf"},"confidence":0.99,"response_message":"Infos du PDF."}'),
+        # MULTI_ACTION — commandes composées [TONY STARK V2]
+    ("ouvre chrome et joue ma playlist",
+     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]}},{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"}}]},"confidence":0.97,"response_message":"Chrome et playlist lances."}'),
+    ("mets le volume a 70 et ouvre vscode",
+     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"AUDIO_VOLUME_SET","params":{"level":70}},{"intent":"APP_OPEN","params":{"app_name":"vscode","args":[]}}]},"confidence":0.97,"response_message":"Volume 70 et VSCode."}'),
+    ("ferme chrome et eteins dans 10 minutes",
+     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_CLOSE","params":{"app_name":"chrome"}},{"intent":"SYSTEM_SHUTDOWN","params":{"delay_seconds":600}}]},"confidence":0.96,"response_message":"Chrome ferme, extinction dans 10 min."}'),
+    ("ouvre chrome cherche python et joue ma playlist",
+     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]}},{"intent":"BROWSER_SEARCH","params":{"query":"python"}},{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"}}]},"confidence":0.95,"response_message":"Chrome, recherche Python, et playlist."}'),
     # PREFERENCE_SET — mémorisation préférences utilisateur
     ("j aime jouer ma playlist quand je code",
      '{"intent":"PREFERENCE_SET","params":{"label":"codage","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Je retiens que ta playlist de codage est ma playlist."}'),
@@ -425,36 +677,59 @@ class CommandParser:
         return result
 
     def parse_with_context(self, command: str, history: list = None, retries: int = 2) -> dict:
-        """Parse avec l'historique de conversation."""
-        command = command.strip()
-        if not command:
-            return self._unknown(command, "Commande vide.")
+        """
+        Pipeline hybride : Fast Rules → Embeddings → Local LLM → Groq
+        """
+        from config.settings import LOCAL_LLM_ENABLED
 
-        if self._can_use_groq():
-            for attempt in range(retries + 1):
-                try:
-                    result           = self._call_groq_ai(command, history=history or [])
-                    result           = self._semantic_guard(command, result)
-                    # [C3] _postprocess_result appelé en dernière ligne de défense
-                    result           = self._postprocess_result(command, result)
-                    result["source"] = "groq"
-                    logger.info(f"Intent: {result['intent']} (conf={result['confidence']:.2f}, src=groq+ctx)")
-                    return result
-                except Exception as e:
-                    logger.warning(f"Groq+ctx tentative {attempt + 1} échouée : {e}")
-                    self._set_groq_cooldown_from_error(e)
-                    if "json_validate_failed" in str(e):
-                        break
-                    if time.time() < self._groq_cooldown_until:
-                        break
-                    if attempt < retries:
-                        time.sleep(0.5 * (attempt + 1))
+        # ── Étape 1 : Fast rules (regex/keywords) ────────────────────────
+        # Conserver le fallback_keywords() existant
+        fallback_result = self._fallback_keywords(command)
+        if fallback_result and fallback_result.get("confidence", 0) >= 0.90:
+            fallback_result["source"] = "fast_rules"
+            return fallback_result
 
-        result           = self._semantic_guard(command, self._fallback_keywords(command))
-        # [C3] _postprocess_result appelé aussi sur le fallback
-        result           = self._postprocess_result(command, result)
-        result["source"] = "fallback"
-        return result
+        if LOCAL_LLM_ENABLED:
+            # ── Étape 2 : Embedding Router ───────────────────────────────
+            try:
+                from core.embedding_router import EmbeddingRouter
+                if not hasattr(self, '_embed_router'):
+                    self._embed_router = EmbeddingRouter()
+                embed_result = self._embed_router.route(command)
+                if embed_result and embed_result.get("confidence", 0) >= 0.82:
+                    return embed_result
+            except Exception as e:
+                logger.debug(f"EmbeddingRouter skipped: {e}")
+
+            # ── Étape 3 : Local LLM ──────────────────────────────────────
+            try:
+                from core.local_llm import LocalLLMParser
+                from core.dataset_builder import load_examples
+                if not hasattr(self, '_local_llm'):
+                    self._local_llm = LocalLLMParser()
+                if self._local_llm.is_available:
+                    examples = load_examples(n=40, min_confidence=0.85)
+                    local_result = self._local_llm.parse(command, examples)
+                    if local_result.get("confidence", 0) >= 0.75:
+                        # Logger dans le dataset pour amélioration continue
+                        from core.dataset_builder import save_entry
+                        save_entry(command, local_result, source="local_llm")
+                        return local_result
+            except Exception as e:
+                logger.debug(f"LocalLLM skipped: {e}")
+
+        # ── Étape 4 : Groq (fallback) ─────────────────────────────────────
+        groq_result = self._call_groq_ai(command, history or [])
+
+        # Logger dans le dataset si Groq a bien répondu
+        if groq_result.get("confidence", 0) >= 0.80:
+            try:
+                from core.dataset_builder import save_entry
+                save_entry(command, groq_result, source="groq")
+            except Exception:
+                pass
+
+        return groq_result
 
     # ──────────────────────────────────────────────────────────────────────────
     #  APPEL GROQ — [C2] CORRIGÉ
@@ -496,14 +771,6 @@ class CommandParser:
         if history_to_use:
             for msg in history_to_use[-12:]:
                 role    = msg.get("role", "user")
-
-
-
-
-
-
-
-
                 content = str(msg.get("content", "")).strip()
 
                 # Ignorer les messages vides ou les rôles inconnus
@@ -524,7 +791,14 @@ class CommandParser:
         messages.append({"role": "user", "content": command})
 
         # ── Appel API ─────────────────────────────────────────────────────────
-        tools = convert_intents_to_tools()
+        # LEVEL 3: Tools schemas via tool_schema.py
+        from core.tool_schema import get_tool_schemas_for_groq
+        tools = get_tool_schemas_for_groq()
+
+        if len(tools) > 128:
+            logger.warning(f"Trop de tools ({len(tools)}) pour Groq; utilisation d'un sous-ensemble critique")
+            tools = tools[:120]
+
         response = self.client.chat.completions.create(
             model=GROQ_MODEL_NAME,
             messages=messages,
@@ -539,97 +813,63 @@ class CommandParser:
             tc = msg.tool_calls[0]
             try:
                 params = json.loads(tc.function.arguments)
-                return {
+                result = {
                     "intent": tc.function.name,
                     "params": params,
                     "confidence": 1.0,
                     "response_message": f"Exécution de {tc.function.name}...",
                     "raw": command
                 }
-            except: pass
+                # ── Dataset logger [TONY STARK V2] ──────────────────────────────────
+                try:
+                    from config.settings import DATASET_MODE
+                    if DATASET_MODE:
+                        from core.dataset_builder import save_entry
+                        save_entry(
+                            input_text=command,
+                            result=result,
+                            source="groq"
+                        )
+                except Exception:
+                    pass  # Ne jamais bloquer le parsing pour le dataset
+                return result
+            except json.JSONDecodeError as e:
+                logger.warning(f"Tool call JSON parse failed: {e}, intent={tc.function.name}, falling back to text response")
+            except Exception as e:
+                logger.error(f"Tool call extraction error: {e}")
 
         raw_json = response.choices[0].message.content.strip()
-        return self._parse_json_response(raw_json, command)
+        result = self._parse_json_response(raw_json, command)
+        # ── Dataset logger [TONY STARK V2] ──────────────────────────────────
+        try:
+            from config.settings import DATASET_MODE
+            if DATASET_MODE:
+                from core.dataset_builder import save_entry
+                save_entry(
+                    input_text=command,
+                    result=result,
+                    source="groq"
+                )
+        except Exception:
+            pass  # Ne jamais bloquer le parsing pour le dataset
+        return result
 
     # ──────────────────────────────────────────────────────────────────────────
     #  PROMPT SYSTÈME
     # ──────────────────────────────────────────────────────────────────────────
 
     def _build_system_prompt(self, memory_summary: str = "") -> str:
-        intents_block = "\n".join(
-            f'- {key}: {v["desc"]}  '
-            f'[params: {", ".join(f"{k}={t}" for k, t in v["params"].items()) or "aucun"}]'
-            for key, v in INTENTS.items()
-            if key != "UNKNOWN"
-        )
-
-        memory_block = ""
-        if memory_summary:
-            memory_block = f"""
-MÉMOIRE :
-{memory_summary}
-
-Utilise cette mémoire pour résoudre "le", "ça", "celui-là".
-"""
-
-        return f"""Tu es JARVIS, l'assistant IA de contrôle PC. Tu es conversationnel et intelligent.
-Tu comprends le français, l'anglais, les tournures naturelles et les références contextuelles.
-
-INTENTIONS DISPONIBLES :
-{intents_block}{memory_block}
-
-RÈGLES :
-1. Lis TOUTE la phrase — ne te base jamais sur un seul mot-clé, analyse et deduis l'intention
-
-2. "luminosité" / "luminos" → SCREEN_BRIGHTNESS, jamais AUDIO_PLAY.
-3. "ferme ça/là/cette fenêtre" → WINDOW_CLOSE, jamais SCREEN_OFF.
-4. "mode nuit/travail/cinéma" → MACRO_RUN avec le nom de la macro.
-5. "répète/rejoue" → REPEAT_LAST.
-6. "joue musique X" / "lecture X" → MUSIC_PLAY, pas AUDIO_PLAY.
-5b. Déclarations de préférence ("j'aime X quand je Y", "mon son de X c'est Y",
-    "quand je code je joue X", "retiens que mon X c'est Y", "associe X à Y",
-    "j'ai une musique de X que j'aime") → PREFERENCE_SET avec label=contexte, value=ressource.
-7. "joue playlist X" → MUSIC_PLAYLIST_PLAY.
-8. "ajoute le dossier/tous les songs/toute ma musique/tous les fichiers/mets ma musique dans... à la playlist X" → MUSIC_PLAYLIST_ADD_FOLDER (name=playlist, folder="").
-   "va dans le dossier Musique tu ajoutes à ma playlist" → aussi MUSIC_PLAYLIST_ADD_FOLDER.
-   "je t'ai dit d'ajouter ma musique à la playlist" → aussi MUSIC_PLAYLIST_ADD_FOLDER.
-   JAMAIS MUSIC_PLAYLIST_CREATE quand l'intention est d'ajouter des fichiers existants.
-9. "ajoute la chanson X à la playlist Y" → MUSIC_PLAYLIST_ADD_SONG (query=X).
-   "ajoute le fichier X.mp3 [du bureau/des téléchargements] à la playlist Y"
-   → MUSIC_PLAYLIST_ADD_SONG avec query=X, song=X, folder=lieu.
-   RÈGLE CRITIQUE : si la commande mentionne UN SEUL fichier (avec ou sans extension)
-   ou "le fichier", "ce fichier", "ce morceau", "cette chanson", "qui est sur le bureau",
-   "dans les téléchargements", "dans mes documents" → TOUJOURS MUSIC_PLAYLIST_ADD_SONG.
-   TOUJOURS inclure folder dans params si un lieu est mentionné
-   (bureau→"bureau", téléchargements→"téléchargements", documents→"documents", etc.).
-   TOUJOURS inclure song=query (copie du champ query).
-   Si elle mentionne "le dossier entier", "tous les fichiers", "tous mes songs" → MUSIC_PLAYLIST_ADD_FOLDER.
-10. "joue la" après avoir parlé d'une playlist → MUSIC_PLAYLIST_PLAY avec le nom du contexte.
-11. "renomme la playlist X en Y" → MUSIC_PLAYLIST_RENAME (old_name=X, new_name=Y).
-12. "duplique la playlist X en Y" → MUSIC_PLAYLIST_DUPLICATE (source=X, target=Y).
-13. "exporte la playlist X" → MUSIC_PLAYLIST_EXPORT (name=X, format=m3u par défaut).
-14. "importe la playlist depuis <fichier>" → MUSIC_PLAYLIST_IMPORT (path=<fichier>, name optionnel).
-15. "fusionne la playlist X avec Y [dans Z]" → MUSIC_PLAYLIST_MERGE (source=X, target=Y, output=Z optionnel).
-16. "déplace la chanson X dans la playlist Y en position N" → MUSIC_PLAYLIST_MOVE_SONG (name=Y, query=X, to_index=N).
-17. "ajoute X à la file d'attente" → MUSIC_QUEUE_ADD (query=X).
-18. "ajoute la playlist X à la file d'attente" → MUSIC_QUEUE_ADD_PLAYLIST (name=X).
-19. "liste/vide/lance la file d'attente" → MUSIC_QUEUE_LIST / MUSIC_QUEUE_CLEAR / MUSIC_QUEUE_PLAY.
-20. Salutations → GREETING. Questions capacités → HELP.
-21. Phrases multi-actions → retenir l'ACTION FINALE.
-22. Si vraiment incompréhensible → UNKNOWN.
-23. Si la requête est une question de connaissance générale (définition, explication, comparaison,
-    culture générale, raisonnement) et ne demande pas d'action sur le PC → KNOWLEDGE_QA.
-24. Pour KNOWLEDGE_QA, donne la réponse directement dans `response_message`.
-25. SORTIE STRICTE : retourne UNIQUEMENT un objet JSON avec EXACTEMENT ces clés
-    `intent`, `params`, `confidence`, `response_message`.
-26. INTERDIT de retourner des objets métier (`cpu`, `ram`, `disk`, `system_info`, etc.).
-27. `params` doit être un objet JSON ({{}} si vide), jamais du texte.
-28. `confidence` doit être un nombre entre 0 et 1.
-29. Si la demande concerne l'état/infos du système PC → `intent` = `SYSTEM_INFO`.
-
-FORMAT (JSON uniquement) :
-{{"intent": "NOM", "params": {{}}, "confidence": 0.95, "response_message": "Réponse naturelle."}}
-"""
+        """
+        LEVEL 3 OPTIMIZED — Ultra-minimal system prompt (~400 tokens).
+        
+        Le Router gère 90% des commandes (0 tokens).
+        Ce prompt ne s'utilise que comme fallback pour les cas complexes.
+        """
+        
+        # LEVEL 3: Use minimal system prompt
+        from core.smart_context_injector import get_context_injector
+        injector = get_context_injector()
+        return injector.build_minimal_system_prompt(user_context=memory_summary[:100])
 
     def _parse_json_response(self, raw_json: str, original_command: str) -> dict:
         clean = re.sub(r"```(?:json)?", "", raw_json).strip()
@@ -1235,6 +1475,10 @@ FORMAT (JSON uniquement) :
         if any(k in lower for k in ["cherche sur youtube", "recherche sur youtube", "search youtube"]) or ("youtube" in lower and re.search(r"\b(cherche|recherche|search)\b", lower)):
             query = self._extract_after(lower, ["cherche sur youtube ", "recherche sur youtube ", "search youtube ", "youtube "])
             return {"intent": "BROWSER_SEARCH_YOUTUBE", "params": {"query": query}, "confidence": 0.9}
+        # Email search BEFORE generic search to avoid FILE_SEARCH conflict
+        if any(k in lower for k in ["cherche email", "recherche email", "trouve email", "email de", "mail de", "messages de"]):
+            query = self._extract_after(lower, ["cherche email ", "recherche email ", "trouve email ", "email de ", "mail de ", "messages de "])
+            return {"intent": "EMAIL_SEARCH", "params": {"query": query or lower}, "confidence": 0.9}
         if re.search(r"\b(cherche|trouve|search)\b", lower):
             query = self._extract_after(lower, ["cherche ", "trouve ", "search "])
             if any(k in lower for k in ["sur le web", "sur google", "google", "internet",
@@ -1268,7 +1512,7 @@ FORMAT (JSON uniquement) :
         if re.search(r"(resume|resumé|summary).*(structuré|structure|structured)", lower):
             return {"intent": "BROWSER_EXTRACT_SUMMARY", "params": {}, "confidence": 0.9}
 
-        if re.search(r"(redige|rediges|compose|rédige|envoie).*(email|mail|message)", lower) or \
+        if re.search(r"(redige|rediges|compose|rédige).*(email|mail|message)", lower) or \
            re.search(r"(email|mail|message).*(à|to).+avec", lower):
             to = self._extract_email_address(lower) or ""
             subject = self._extract_after(lower, ["objet ", "subject ", "sujet "])
@@ -1357,6 +1601,48 @@ FORMAT (JSON uniquement) :
             ])
         ):
             return {"intent": "KNOWLEDGE_QA", "params": {}, "confidence": 0.75}
+
+        # ── Telegram (Semaine 11) ─────────────────────────────────────────────
+        if "telegram" in lower and any(k in lower for k in ["envoie", "message", "à", "a"]):
+            # Exemple: "envoie un message à Paul sur Telegram"
+            to = ""
+            message = ""
+            if "envoie un message à" in lower:
+                content = self._extract_after(lower, ["envoie un message à "])
+                if " sur telegram" in content:
+                    to = content.split(" sur telegram", 1)[0].strip()
+                    message = self._extract_after(lower, ["sur telegram", "via telegram"]).strip()
+                else:
+                    to = content.strip()
+            if not message:
+                # mode fallback: texte entier comme message
+                message = command
+
+            # Nettoyage minimal
+            to = to.strip().strip("'\"")
+            message = message.strip().strip("'\"")
+            return {"intent": "TELEGRAM_SEND", "params": {"to": to or "", "message": message or command}, "confidence": 0.88}
+
+        # ── Email ─────────────────────────────────────────────────────────────
+        if any(k in lower for k in ["mes emails", "mes messages", "boite de reception", "inbox", " lis mes emails", "affiche mes emails"]):
+            return {"intent": "EMAIL_INBOX", "params": {"limit": 10}, "confidence": 0.9}
+        if any(k in lower for k in ["emails non lus", "emails pas lus", "nouveaux emails"]):
+            return {"intent": "EMAIL_INBOX", "params": {"limit": 10, "unread_only": True}, "confidence": 0.9}
+        if any(k in lower for k in ["envoie un email", "envoie un mail", "envoie un message", "envoi email", "envoi mail", "compose email"]):
+            to = self._extract_email_address(command)
+            return {"intent": "EMAIL_SEND", "params": {"to": to or ""}, "confidence": 0.85}
+        if any(k in lower for k in ["reponds a l email", "reponds a mon mail", "reponds a ce message"]):
+            return {"intent": "EMAIL_REPLY", "params": {"email_id": "", "body": ""}, "confidence": 0.8}
+        if any(k in lower for k in ["transfer this email", "transmet l email", "forward email"]):
+            to = self._extract_email_address(command)
+            return {"intent": "EMAIL_FORWARD", "params": {"email_id": "", "to": to or ""}, "confidence": 0.8}
+        if any(k in lower for k in ["cherche email", "recherche email", "trouve email", "email de", "mail de"]):
+            query = self._extract_after(lower, ["cherche email ", "recherche email ", "trouve email ", "email de ", "mail de "])
+            return {"intent": "EMAIL_SEARCH", "params": {"query": query or ""}, "confidence": 0.85}
+        if any(k in lower for k in ["email important", "mail important", "emails urgents"]):
+            return {"intent": "EMAIL_IMPORTANT", "params": {"hours": 24}, "confidence": 0.9}
+        if any(k in lower for k in ["resume mes emails", "resume email", "synopsis emails"]):
+            return {"intent": "EMAIL_SUMMARY", "params": {}, "confidence": 0.85}
 
         return self._unknown(command, "Aucun mot-clé reconnu (Groq hors ligne).")
 
@@ -1590,9 +1876,27 @@ FORMAT (JSON uniquement) :
         m_pwd = re.search(r"(?:mot de passe|password|mdp)\s*[:=]?\s*([\S]+)$", raw, re.IGNORECASE)
         if m_pwd:
             pwd = m_pwd.group(1).strip("\"'")
-        params = {}
+        params = {}  
         if ssid:
             params["ssid"] = ssid
         if pwd:
             params["password"] = pwd
         return params
+
+    @staticmethod
+    def _extract_email_address(text: str) -> str:
+        """
+        Extrait une adresse email depuis le texte.
+        Patterns: email@domain.com, to: email@domain.com, etc.
+        """
+        m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text)
+        return m.group(0) if m else ""
+
+    @staticmethod
+    def _extract_quoted_text(text: str) -> str:
+        """
+        Extrait le texte entre guillemets (simple ou double).
+        Patterns: "texte", 'texte'
+        """
+        m = re.search(r'["\']([^"\']*)["\']\'', text)
+        return m.group(1) if m else ""

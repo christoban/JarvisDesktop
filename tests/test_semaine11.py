@@ -282,8 +282,7 @@ def test_integration():
         ("annule l'extinction",             "POWER_CANCEL"),   # peut être SYSTEM_SHUTDOWN
         ("déverrouille l'écran",            "SCREEN_UNLOCK"),  # peut varier
         ("éteins l'écran",                  "SCREEN_OFF"),
-        ("état d'alimentation",             "POWER_STATE"),
-    ]
+        ("état d'alimentation",             "POWER_STATE"),        ("envoie un message à Paul sur Telegram", "TELEGRAM_SEND"),    ]
 
     global PASS, FAIL
     for cmd, expected in parse_cases:
@@ -308,6 +307,7 @@ def test_integration():
         ("MACRO_DELETE",   {"name": "test_s11"}),
         ("REPEAT_LAST",    {}),
         ("HISTORY_CLEAR",  {}),
+        ("TELEGRAM_SEND",   {"to": "Paul", "message": "Test Telegram via Jarvis"}),
     ]
     sep("GROUPE 4b — Exécution executor S11")
     for intent, params in exec_cases:

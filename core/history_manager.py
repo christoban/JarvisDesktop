@@ -70,7 +70,7 @@ def _summarize_data(data):
 class HistoryEntry:
     """Une entrée d'historique sérialisable en JSON."""
 
-    def __init__(self, command: str, result: dict, source: str, intent: str = "UNKNOWN", duration_ms: int = 0):
+    def __init__(self, command: str, result: dict, source: str, intent: str = "UNKNOWN", duration_ms: int = 0, sensory_context: dict = None):
         ts = int(time.time())
         self.id = int(time.time() * 1000)
         self.command = (command or "").strip()
@@ -81,9 +81,12 @@ class HistoryEntry:
         self.timestamp = ts
         self.duration_ms = int(max(0, duration_ms or 0))
         self.data_summary = _summarize_data((result or {}).get("data"))
+        
+        # [TONY STARK V2] Stocker le contexte système au moment de l'exécution
+        self.sensory_context = sensory_context or {}
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "id": self.id,
             "command": self.command,
             "intent": self.intent,
@@ -95,6 +98,17 @@ class HistoryEntry:
             "duration_ms": self.duration_ms,
             "data_summary": self.data_summary,
         }
+        
+        # [TONY STARK V2] Inclure le contexte sensoriel
+        if self.sensory_context:
+            result["sensory_context"] = {
+                "window": self.sensory_context.get("window", {}),
+                "system": self.sensory_context.get("system", {}),
+                "cpu_percent": self.sensory_context.get("system", {}).get("cpu_percent"),
+                "ram_percent": self.sensory_context.get("system", {}).get("ram_percent"),
+            }
+        
+        return result
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -109,6 +123,7 @@ class HistoryEntry:
             source=d.get("source", "terminal"),
             intent=d.get("intent", "UNKNOWN"),
             duration_ms=d.get("duration_ms", 0),
+            sensory_context=d.get("sensory_context"),
         )
         obj.id = int(d.get("id", obj.id))
         obj.timestamp = int(d.get("timestamp", obj.timestamp))
@@ -126,9 +141,21 @@ class HistoryManager:
         self._load()
         logger.info(f"HistoryManager initialisé. Fichier: {self.history_file}")
 
-    def save(self, command: str, result: dict, source: str = "terminal", intent: str = "UNKNOWN", duration_ms: int = 0):
-        """Sauvegarde une commande en tête de liste (plus récent d'abord)."""
-        entry = HistoryEntry(command, result or {}, source, intent, duration_ms)
+    def save(self, command: str, result: dict, source: str = "terminal", intent: str = "UNKNOWN", duration_ms: int = 0, sensory_context: dict = None):
+        """
+        Sauvegarde une commande en tête de liste (plus récent d'abord).
+        
+        [TONY STARK V2] Capture automatiqu le contexte sensoriel si non fourni.
+        """
+        # Capturer le contexte sensoriel si disponible et non fourni
+        if sensory_context is None:
+            try:
+                from core.sensory import SensoryCapteur
+                sensory_context = SensoryCapteur.capture_full_context()
+            except Exception:
+                sensory_context = {}
+        
+        entry = HistoryEntry(command, result or {}, source, intent, duration_ms, sensory_context)
         with self._lock:
             self._entries.insert(0, entry)
             self._rotate()

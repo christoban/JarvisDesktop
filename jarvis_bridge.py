@@ -31,10 +31,41 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from concurrent.futures import ThreadPoolExecutor
+from socketserver import ThreadingMixIn
+from http.server import HTTPServer
+
+# ── Configuration du logger ───────────────────────────────────────────────────
 try:
-    from http.server import ThreadingHTTPServer
+    from config.logger import get_logger
+    logger = get_logger(__name__)
 except ImportError:
-    ThreadingHTTPServer = HTTPServer  # Python < 3.7 fallback
+    import logging
+    logger = logging.getLogger(__name__)
+
+# ── Thread Pool HTTP Server (FIX #4) ───────────────────────────────────────
+class ThreadPoolHTTPServer(ThreadingMixIn, HTTPServer):
+    """
+    HTTP Server with bounded thread pool to prevent memory DOS.
+    Limits concurrent requests to MAX_WORKERS instead of unlimited threads.
+    """
+    def __init__(self, *args, max_workers=20, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="http-worker")
+        print(f"  📊 HTTP Server: max {max_workers} concurrent workers")
+
+    def process_request(self, request, client_address):
+        """Override to use thread pool instead of unlimited threads."""
+        self.executor.submit(self.process_request_thread, request, client_address)
+
+    def process_request_thread(self, request, client_address):
+        """Process request in thread pool."""
+        try:
+            self.finish_request(request, client_address)
+            self.shutdown_request(request)
+        except Exception:
+            self.handle_error(request, client_address)
+            self.shutdown_request(request)
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from modules.screen_share.capture import get_capture, reset_capture, ScreenCapture
@@ -184,8 +215,15 @@ PORT = 7071
 _agent:      "Agent"     = None
 _tts:        "TTSEngine" = None
 _agent_lock  = threading.Lock()
+
+# Lazy initialization globals
+_agent_init_thread = None
+_agent_init_event = threading.Event()
+
 _results:    dict        = {}
 _store_lock  = threading.Lock()
+_results_cleanup_thread = None
+_results_cleanup_stop   = threading.Event()
 _notifications: list     = []
 _notifications_lock       = threading.Lock()
 
@@ -224,7 +262,87 @@ _battery_monitor_lock = threading.Lock()
 _last_battery_notif_at = 0
 _last_battery_level = None
 
-def get_agent() -> "Agent":
+
+def _init_agent_background():
+    """
+    Run Agent() initialization on a background thread.
+    Sets _agent_init_event when done (success or failure).
+    """
+    global _agent
+    try:
+        print("  ⏳ [Background] Initializing Agent (this takes 3-5 sec)...")
+        _agent = Agent()
+        print("  ✅ [Background] Agent ready!")
+    except Exception as e:
+        print(f"  ❌ [Background] Agent init failed: {e}")
+        _agent = None
+    finally:
+        _agent_init_event.set()  # Signal initialization complete (success or fail)
+
+
+def start_agent_init_once():
+    """
+    Kick off Agent initialization on background thread.
+    Safe to call multiple times (only starts once).
+    """
+    global _agent_init_thread
+    if _agent_init_thread is not None and _agent_init_thread.is_alive():
+        return  # Already running
+
+    _agent_init_thread = threading.Thread(
+        target=_init_agent_background,
+        daemon=False,  # Important: not a daemon — we wait for cleanup
+        name="jarvis-agent-init"
+    )
+    _agent_init_thread.start()
+
+
+def get_agent_async():
+    """
+    Get Agent without blocking.
+    Returns None if still initializing.
+
+    USAGE: In HTTP handlers that can handle 202 Accepted response
+    """
+    global _agent
+
+    if _agent is not None:
+        return _agent  # Already loaded
+
+    if not _agent_init_event.is_set():
+        return None  # Still initializing
+
+    # Initialization finished but failed
+    return _agent
+
+
+def get_agent(wait_timeout=30):
+    """
+    Get Agent, optionally waiting for initialization.
+
+    USAGE: For code that needs to block until Agent is ready.
+    For HTTP handlers, prefer get_agent_async() + 202 response.
+
+    Args:
+        wait_timeout: Max seconds to wait for Agent to init (0 = no wait)
+
+    Returns:
+        Agent instance, or None if unavailable
+    """
+    global _agent
+
+    if _agent is not None:
+        return _agent  # Already ready
+
+    if wait_timeout > 0 and AGENT_AVAILABLE:
+        # Wait for background init to complete
+        if _agent_init_event.wait(timeout=wait_timeout):
+            return _agent  # Ready (success or failed)
+
+    return _agent
+
+
+def get_tts() -> "TTSEngine":
     global _agent
     with _agent_lock:
         if _agent is None and AGENT_AVAILABLE:
@@ -261,6 +379,53 @@ def get_crypto():
         if _crypto_singleton is None and _SECURITY_AVAILABLE and MessageCrypto is not None:
             _crypto_singleton = MessageCrypto()
     return _crypto_singleton
+
+
+def _cleanup_expired_results():
+    """
+    Background thread to clean expired results from _results dict.
+    Prevents memory leak when clients don't poll results.
+    """
+    while not _results_cleanup_stop.is_set():
+        try:
+            current_time = time.time()
+            expired_keys = []
+
+            with _store_lock:
+                for key, data in _results.items():
+                    timestamp = data.get("timestamp", 0)
+                    if current_time - timestamp > RESULT_TTL_SECONDS:
+                        expired_keys.append(key)
+
+                for key in expired_keys:
+                    del _results[key]
+
+            if expired_keys:
+                print(f"  🧹 Cleaned {len(expired_keys)} expired results")
+
+        except Exception as e:
+            print(f"  ⚠️  Result cleanup error: {e}")
+
+        # Sleep for 5 minutes between cleanups
+        _results_cleanup_stop.wait(300)
+
+
+def _start_results_cleanup_once():
+    """
+    Start background cleanup thread for expired results.
+    Safe to call multiple times.
+    """
+    global _results_cleanup_thread
+    if _results_cleanup_thread is not None and _results_cleanup_thread.is_alive():
+        return
+
+    _results_cleanup_thread = threading.Thread(
+        target=_cleanup_expired_results,
+        daemon=True,
+        name="results-cleanup"
+    )
+    _results_cleanup_thread.start()
+    print("  🧹 Results cleanup thread started")
 
 
 def get_local_ip() -> str:
@@ -1011,6 +1176,28 @@ class BridgeHandler(BaseHTTPRequestHandler):
                     "running": cap._running,
                 }
             })
+        
+        # ── SENSORY CONTEXT (TONY STARK V2) ───────────────────────────────
+        if path == "/api/context":
+            auth_result = self._auth(method="GET", path=path)
+            if not auth_result["ok"]:
+                return self._json({"error": "Unauthorized", "reason": auth_result.get("reason", "Unauthorized")}, 401)
+            
+            try:
+                from core.sensory import SensoryCapteur
+                sensory_data = SensoryCapteur.capture_full_context()
+                return self._json({
+                    "status": "ok",
+                    "sensory_context": sensory_data,
+                    "timestamp": sensory_data.get("timestamp", int(time.time())),
+                    "system": sensory_data.get("system", {}),
+                    "window": sensory_data.get("window", {}),
+                    "apps": sensory_data.get("apps", []),
+                    "network": sensory_data.get("network", {}),
+                })
+            except Exception as e:
+                print(f"❌ Erreur /api/context : {e}")
+                return self._json({"error": str(e), "status": "error"}, 500)
 
         return self._json({"error": f"Route inconnue: {path}"}, 404)
 
@@ -1064,6 +1251,17 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if not command:
                 return self._json({"error": "Commande vide"}, 400)
 
+            # ─── FIX: Check if Agent is ready ───
+            agent = get_agent_async()
+            if agent is None:
+                # Agent still initializing
+                return self._json({
+                    "status": "agent_loading",
+                    "message": "Agent initializing (3-5 sec), retry in 2 seconds",
+                    "retry_after": 2,
+                }, 202)  # 202 Accepted
+
+            # Agent is ready, proceed as normal
             cmd_id = str(uuid.uuid4())[:12]
             print(f"\n  📱 [{device_id}] \"{command}\"  (id={cmd_id[:8]}, tts={'oui' if speak else 'non'})")
 
@@ -1255,17 +1453,16 @@ if __name__ == "__main__":
     
     print("=" * 64 + "\n")
 
-    # Pré-charger
-    print("  ⏳ Chargement agent + TTS...")
-    agent = get_agent()
-    tts   = get_tts()
+    # Start Agent initialization in background (don't block)
+    print("  ⏳ Starting Agent initialization in background...")
+    start_agent_init_once()
 
-    if agent:
-        ai_mode = "🤖 Groq" if getattr(getattr(agent,"parser",None),"ai_available",False) else "⚡ keywords"
-        print(f"  ✅ Agent Jarvis — {ai_mode}")
-    else:
-        print("  ⚠  Agent indisponible")
+    # Don't block here — server starts immediately
+    # Agent will be ready in ~3-5 seconds
+    print("  ℹ️  Note: First API requests may return 202 'Agent loading' until ready")
 
+    # Load TTS immediately (fast)
+    tts = get_tts()
     if tts:
         print(f"  ✅ TTS — backend={tts.backend}")
         if not OPENAI_API_KEY:
@@ -1292,8 +1489,9 @@ if __name__ == "__main__":
     print()
 
     _start_battery_monitor_once()
+    _start_results_cleanup_once()
 
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), BridgeHandler)
+    server = ThreadPoolHTTPServer(("0.0.0.0", PORT), BridgeHandler, max_workers=20)
     print("  ✅ Bridge actif — Ctrl+C pour arrêter\n")
     try:
         server.serve_forever()

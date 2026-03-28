@@ -65,6 +65,11 @@ _FALLBACKS: dict[str, list[str]] = {
     "FILE_SEARCH":      ["Je cherche ce fichier.", "Recherche en cours."],
     "FILE_OPEN":        ["Fichier ouvert.", "C'est ouvert."],
     "SCREEN_CAPTURE":   ["Capture effectuée.", "Screenshot pris."],
+    "VISION_READ_SCREEN": ["Je lis ce qu'il y a à l'écran.", "Voilà ce que je vois."],
+    "VISION_CLICK_TEXT": ["Je clique dessus.", "C'est fait."],
+    "VISION_SUMMARIZE":  ["Voilà ce qui s'affiche à l'écran.", "Résumé de la page."],
+    "VISION_FIND_BUTTON": ["Bouton trouvé.", "Le voici."],
+    "VISION_EXTRACT_LINKS": ["Liens extraits.", "J'ai trouvé ces liens."],
     "MACRO_RUN":        ["Macro lancée.", "Séquence exécutée."],
     "REPEAT_LAST":      ["Je répète la dernière commande.", "C'est reparti."],
     "HISTORY_SHOW":     ["Voici l'historique.", "J'ai l'historique."],
@@ -166,7 +171,14 @@ class JarvisVoice:
         params: dict,
         exec_result: dict,
         conversation_history: Optional[list] = None,
+        sensory_context: dict = None,
     ) -> str:
+        """
+        Génère une réponse naturelle.
+        
+        [TONY STARK V2] Accepte sensory_context pour adapter la réponse
+        au contexte actuel du PC (fenêtre active, CPU, etc.)
+        """
         if not self._available:
             return self._fallback(intent, exec_result)
         if time.time() < self._cooldown_until:
@@ -179,6 +191,7 @@ class JarvisVoice:
                 params=params,
                 exec_result=exec_result,
                 history=conversation_history or [],
+                sensory_context=sensory_context,  # TONY STARK V2
             )
             response = self._call_groq(messages)
             if response:
@@ -243,6 +256,7 @@ class JarvisVoice:
         params: dict,
         exec_result: dict,
         history: list,
+        sensory_context: dict = None,
     ) -> list:
         """
         Construit la liste de messages pour Groq.
@@ -268,7 +282,29 @@ class JarvisVoice:
 
         data_hint = self._extract_concrete_data_hint(intent, params, data)
 
+        # [TONY STARK V2] Ajouter le contexte sensoriel si disponible
+        sensory_hint = ""
+        if sensory_context and isinstance(sensory_context, dict):
+            window = sensory_context.get("window", {})
+            system = sensory_context.get("system", {})
+            if window or system:
+                sensory_hint = "\nCONTEXTE PC ACTUEL :\n"
+                if window:
+                    sensory_hint += f"- Fenêtre active : {window.get('title', 'inconnue')}\n"
+                if system:
+                    cpu = system.get("cpu_percent", "?")
+                    ram = system.get("ram_percent", "?")
+                    sensory_hint += f"- Charge système : CPU {cpu}%, RAM {ram}%"
 
+                # Enrichir avec les apps importantes via format_for_groq
+        if sensory_context and sensory_hint:
+            try:
+                from core.sensory import SensoryCapteur
+                full_fmt = SensoryCapteur.format_for_groq(sensory_context)
+                if full_fmt and len(full_fmt) > len(sensory_hint):
+                    sensory_hint = "\n" + full_fmt
+            except Exception:
+                pass  # Garder sensory_hint construit manuellement
 
         context_msg = (
             f"Commande utilisateur : \"{user_command}\"\n"
@@ -276,7 +312,8 @@ class JarvisVoice:
             f"Paramètres : {self._safe_params(params)}\n"
             f"Résultat : {'SUCCÈS' if success else 'ÉCHEC'}\n"
             f"Message technique : {raw_msg[:_MAX_RESULT_CHARS]}"
-            f"{data_hint}\n\n"
+            f"{data_hint}"
+            f"{sensory_hint}\n\n"
             f"Génère la réponse naturelle de Jarvis."
         )
 

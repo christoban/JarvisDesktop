@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config.settings import check_config
 from config.logger import get_logger
 from core.agent import Agent
+from core.telegram_bot import get_telegram_bot
 
 logger = get_logger("main")
 
@@ -41,13 +42,30 @@ def main():
     # Démarrage de l'agent
     agent = Agent()
 
+    # Intégration Telegram (start/polling en production)
+    telegram_bot = get_telegram_bot()
+    if telegram_bot and telegram_bot.is_connected:
+        telegram_bot.set_command_handler(lambda text: agent.handle_command(text, source="telegram"))
+        telegram_bot.start_polling()
+        logger.info("Telegram : daemon poll démarre")
+        print("📡 Telegram : démarré (mode commande distante).")
+    else:
+        logger.info("Telegram : non configuré ou erreur de connexion")
+
     # TODO Semaine 6 : lancer aussi le WebSocket en parallèle
     # from communication.websocket_client import WebSocketClient
     # ws = WebSocketClient(agent)
     # ws.start()  # dans un thread séparé
 
-    # Mode terminal interactif (actif dès maintenant)
-    agent.start()
+    try:
+        # Mode terminal interactif (actif dès maintenant)
+        agent.start()
+    except KeyboardInterrupt:
+        logger.info("Interruption clavier reçue, arrêt en cours...")
+    finally:
+        if telegram_bot:
+            telegram_bot.stop_polling()
+            logger.info("Telegram : polling arrêté")
 
 
 if __name__ == "__main__":

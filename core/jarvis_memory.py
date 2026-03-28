@@ -81,7 +81,11 @@ class JarvisMemory:
         MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
         
         # Initialisation mémoire vectorielle (RAG)
-        vector_path = MEMORY_FILE.parent / "vector_store"
+        try:
+            from config.settings import CHROMADB_PATH
+            vector_path = CHROMADB_PATH
+        except ImportError:
+            vector_path = MEMORY_FILE.parent / "vector_store"
         self.vector_db = VectorDB(vector_path)
 
         self._load()
@@ -201,6 +205,31 @@ class JarvisMemory:
             if isinstance(fact, dict):
                 return fact.get("value")
             return fact
+
+    def query_memory(self, query: str, limit: int = 3) -> list[str]:
+        """
+        [TONY STARK V2] Recherche sémantique dans la mémoire vectorielle.
+        Utilisé par multi_action.py et macros.py pour les variables dynamiques.
+
+        Exemples :
+          memory.query_memory("musique de travail") → ["pref_music_travail = ma playlist"]
+          memory.query_memory("mon serveur") → ["serveur est 192.168.1.100"]
+          memory.query_memory("dernier fichier python") → ["Action file : script.py"]
+        """
+        try:
+            results = self.vector_db.query_memory(query, limit=limit)
+            return results if results else []
+        except Exception as e:
+            logger.debug(f"query_memory échoué : {e}")
+            # Fallback : chercher dans les facts
+            query_lower = query.lower()
+            matches = []
+            with self._lock:
+                for key, val in self._data["facts"].items():
+                    v = val.get("value") if isinstance(val, dict) else val
+                    if query_lower in str(key).lower() or query_lower in str(v).lower():
+                        matches.append(f"{key} = {v}")
+            return matches[:limit]
 
     def get_preference(self, key: str, default=None):
         """Retourne une préférence mémorisée."""
@@ -492,6 +521,23 @@ class JarvisMemory:
             original = command[command.lower().index(match.group(1)):].strip().strip(".,!?")
             if value and len(value) < 200:
                 self.remember_fact(f"note", original)
+            return
+
+        # Pattern 7 : "c'est X qui est installe et que j'utilise pour Y"
+        # Capture : "c'est outlook qui est installe et que j'utilise pour mes emails"
+        match = re.search(
+            r"c'est\s+(\w+)",
+            lower
+        )
+        if match:
+            value = match.group(1).strip().strip(".,!?")
+            if value and len(value) < 30:
+                if "email" in lower or "mail" in lower:
+                    self.remember_fact("email_client", value)
+                    logger.info(f"Jarvis a appris : client email = {value}")
+                elif "navig" in lower or "browser" in lower:
+                    self.remember_fact("default_browser", value)
+                    logger.info(f"Jarvis a appris : navigateur par defaut = {value}")
             return
 
     # ══════════════════════════════════════════════════════════════════════════

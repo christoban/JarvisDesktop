@@ -1,0 +1,27 @@
+{"timestamp": "2026-03-27T14:54:30.840817", "input": "ouvre python", "intent": "APP_OPEN", "params": {"app_name": "python"}, "confidence": 0.95, "source": "test"}
+{"timestamp": "2026-03-27T14:55:26.701290", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.95, "source": "test"}
+{"timestamp": "2026-03-27T14:55:26.702290", "input": "joue ma playlist jazz", "intent": "MUSIC_PLAYLIST_PLAY", "params": {"playlist_name": "jazz"}, "confidence": 0.92, "source": "test"}
+{"timestamp": "2026-03-27T14:55:26.705290", "input": "quelle heure est-il", "intent": "SYSTEM_TIME", "params": {}, "confidence": 0.99, "source": "test"}
+{"timestamp": "2026-03-27T14:55:26.707290", "input": "crée un dossier sur le bureau", "intent": "FOLDER_CREATE", "params": {"path": "dossier", "location": "Desktop"}, "confidence": 0.88, "source": "test"}
+{"timestamp": "2026-03-27T16:21:44.059997", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.95, "source": "test"}
+{"timestamp": "2026-03-27T16:21:44.061996", "input": "joue ma playlist jazz", "intent": "MUSIC_PLAYLIST_PLAY", "params": {"playlist_name": "jazz"}, "confidence": 0.92, "source": "test"}
+{"timestamp": "2026-03-27T16:21:44.063998", "input": "quelle heure est-il", "intent": "SYSTEM_TIME", "params": {}, "confidence": 0.99, "source": "test"}
+{"timestamp": "2026-03-27T16:21:44.065998", "input": "crée un dossier sur le bureau", "intent": "FOLDER_CREATE", "params": {"path": "dossier", "location": "Desktop"}, "confidence": 0.88, "source": "test"}
+{"timestamp": "2026-03-27T20:26:24.833500", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {}, "confidence": 0.9, "source": "fast_intent"}
+{"timestamp": "2026-03-27T20:26:51.208501", "input": "non ouvre un nouvel onglet plutot", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
+{"timestamp": "2026-03-27T20:27:25.569542", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "dernière fenêtre ouverte"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-27T20:27:25.570540", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "dernière fenêtre ouverte"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-27T20:27:27.405536", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {}, "confidence": 0.99, "source": "llm"}
+{"timestamp": "2026-03-27T20:27:50.756542", "input": "ferme le nouvel onglet", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
+{"timestamp": "2026-03-27T20:47:52.902890", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {}, "confidence": 0.9, "source": "fast_intent"}
+{"timestamp": "2026-03-27T20:47:54.452653", "input": "non ouvre un nouvel onglet plutot", "intent": "BROWSER_NEW_TAB", "params": {}, "confidence": 0.95, "source": "context_correction"}
+{"timestamp": "2026-03-27T20:47:57.125654", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "dernière fenêtre ouverte"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-27T20:47:57.127655", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "dernière fenêtre ouverte"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-27T20:47:58.429661", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
+{"timestamp": "2026-03-27T20:48:01.634651", "input": "ferme le nouvel onglet", "intent": "WINDOW_CLOSE", "params": {}, "confidence": 0.95, "source": "llm"}
+{"timestamp": "2026-03-27T20:50:43.771447", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {}, "confidence": 0.9, "source": "fast_intent"}
+{"timestamp": "2026-03-27T20:50:44.747443", "input": "non ouvre un nouvel onglet plutot", "intent": "BROWSER_NEW_TAB", "params": {}, "confidence": 0.95, "source": "groq_correction"}
+{"timestamp": "2026-03-27T20:50:45.990446", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-27T20:50:45.993451", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-27T20:50:47.605454", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
+{"timestamp": "2026-03-27T20:50:50.223447", "input": "ferme le nouvel onglet", "intent": "WINDOW_CLOSE", "params": {}, "confidence": 0.95, "source": "llm"}

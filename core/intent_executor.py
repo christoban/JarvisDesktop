@@ -29,7 +29,14 @@ class IntentExecutor:
         # → {"success": True, "message": "'chrome' lancée.", "data": {...}}
 
     Toutes les méthodes retournent le format standard :
-        { "success": bool, "message": str, "data": dict | None }
+        {
+            "status": "success"|"error"|"partial",
+            "success": bool,
+            "message": str,
+            "data": dict | None,
+            "retryable": bool,
+            "error_code": str | None,
+        }
     """
 
     def __init__(self):
@@ -196,12 +203,35 @@ class IntentExecutor:
             "DOC_READ":        self._doc_read,
             "DOC_SUMMARIZE":   self._doc_summarize,
             "DOC_SEARCH_WORD": self._doc_search_word,
+            "DOC_QA":          self._doc_qa,
+            # ── Word ─────────────────────────────────────────────────────────
+            "WORD_CREATE":     self._word_create,
+            "WORD_EDIT":       self._word_edit,
+            "WORD_EXPORT_PDF": self._word_export_pdf,
+            "CV_CREATE":       self._cv_create,
+            "REPORT_CREATE":   self._report_create,
+            # ── Excel ────────────────────────────────────────────────────────
+            "EXCEL_CREATE":    self._excel_create,
+            "EXCEL_READ":      self._excel_read,
+            "EXCEL_REPORT":    self._excel_report,
+            # ── PDF ──────────────────────────────────────────────────────────
+            "PDF_EXTRACT":     self._pdf_extract,
+            "PDF_MERGE":       self._pdf_merge,
+            "PDF_SPLIT":       self._pdf_split,
+            "PDF_SEARCH":      self._pdf_search,
+            "PDF_INFO":        self._pdf_info,
             # ── Écran ─────────────────────────────────────────────────────────
             "SCREEN_CAPTURE":      self._screen_capture,
             "SCREENSHOT_TO_PHONE": self._screenshot_to_phone,
             "SCREEN_BRIGHTNESS":   self._screen_brightness,
             "SCREEN_INFO":         self._screen_info,
             "SCREEN_RECORD":       self._screen_record,
+            # ── Vision (Semaine 13) ────────────────────────────────────────────
+            "VISION_READ_SCREEN":   self._vision_read_screen,
+            "VISION_CLICK_TEXT":    self._vision_click_text,
+            "VISION_SUMMARIZE":     self._vision_summarize,
+            "VISION_FIND_BUTTON":  self._vision_find_button,
+            "VISION_EXTRACT_LINKS": self._vision_extract_links,
             # ── Historique / Macros ───────────────────────────────────────────
             "REPEAT_LAST":   self._repeat_last,
             "HISTORY_SHOW":  self._history_show,
@@ -211,6 +241,30 @@ class IntentExecutor:
             "MACRO_LIST":    self._macro_list,
             "MACRO_SAVE":    self._macro_save,
             "MACRO_DELETE":  self._macro_delete,
+            # ── Workflows (Semaine 12) ───────────────────────────────────────────
+            "WORKFLOW_RUN":       self._workflow_run,
+            "WORKFLOW_LIST":      self._workflow_list,
+            "WORKFLOW_REGISTER":  self._workflow_register,
+            # ── Macro Recording (Semaine 12) ───────────────────────────────────
+            "RECORD_START":  self._record_start,
+            "RECORD_STOP":   self._record_stop,
+            # ── Email (Outlook) ───────────────────────────────────────────────
+            "EMAIL_INBOX":        self._email_inbox,
+            "EMAIL_SEND":         self._email_send,
+            "EMAIL_REPLY":        self._email_reply,
+            "EMAIL_FORWARD":      self._email_forward,
+            "EMAIL_SEARCH":       self._email_search,
+            "EMAIL_MARK_READ":     self._email_mark_read,
+            "EMAIL_MARK_UNREAD":   self._email_mark_unread,
+            "EMAIL_DRAFT":        self._email_draft,
+            "EMAIL_ATTACH_FILE":  self._email_attach_file,
+            "EMAIL_SUMMARY":      self._email_summary,
+            "EMAIL_IMPORTANT":    self._email_important,
+            # ── Telegram ─────────────────────────────────────────────────────
+            "TELEGRAM_SEND":      self._telegram_send,
+            "TELEGRAM_NOTIFY":    self._telegram_notify,
+            "TELEGRAM_ALERT":     self._telegram_alert,
+            "TELEGRAM_STATUS":    self._telegram_status,
             # ── Divers ────────────────────────────────────────────────────────
             "GREETING":     self._greeting,
             "INCOMPLETE":   self._incomplete,
@@ -233,7 +287,8 @@ class IntentExecutor:
         if handler is None:
             return self._err(
                 f"Intention inconnue : '{intent}'. "
-                f"({len(self._handlers)} intentions supportées)"
+                f"({len(self._handlers)} intentions supportées)",
+                error_code="INTENT_UNKNOWN"
             )
 
         try:
@@ -247,15 +302,36 @@ class IntentExecutor:
             if result and isinstance(result, dict):
                 result["_show_display"] = should_show_display
             if isinstance(result, dict):
-                return result
+                return self._normalize_result(result)
             if result is None:
-                return self._err(f"{intent}: aucun resultat renvoye.")
+                return self._err(f"{intent}: aucun resultat renvoye.", error_code="EXEC_NO_RESULT")
             if isinstance(result, str):
-                return self._err(result or f"{intent}: resultat texte invalide")
-            return self._err(f"{intent}: type de retour invalide ({type(result).__name__})")
+                return self._err(result or f"{intent}: resultat texte invalide", error_code="EXEC_INVALID_TEXT")
+            return self._err(f"{intent}: type de retour invalide ({type(result).__name__})", error_code="EXEC_INVALID_TYPE")
         except Exception as e:
             logger.error(f"Erreur exécution intent={intent} : {e}", exc_info=True)
-            return self._err(f"Erreur lors de l'exécution de '{intent}' : {str(e)}")
+            return self._err(f"Erreur lors de l'exécution de '{intent}' : {str(e)}", error_code="EXEC_EXCEPTION", retryable=True)
+
+    def _normalize_result(self, result: dict) -> dict:
+        """Garantit le nouveau contrat tout en gardant la compatibilité avec l'ancien champ success."""
+        out = dict(result)
+
+        status = out.get("status")
+        success = out.get("success")
+
+        if status not in {"success", "error", "partial"}:
+            if isinstance(success, bool):
+                status = "success" if success else "error"
+            else:
+                status = "success"
+
+        out["status"] = status
+        out["success"] = status != "error"
+        out.setdefault("message", "")
+        out.setdefault("data", None)
+        out.setdefault("retryable", False)
+        out.setdefault("error_code", None)
+        return out
 
     def _user_asked_for_details(self, raw_command: str) -> bool:
         if not raw_command:
@@ -1871,6 +1947,212 @@ class IntentExecutor:
             return self._err("Précise le mot à chercher.")
         return self.dr.search_word(path, word)
 
+    def _doc_qa(self, p):
+        path     = p.get("path") or p.get("file") or ""
+        question = p.get("question") or p.get("query") or ""
+        if not path:
+            return self._err("Précise le document à analyser.")
+        if not question:
+            return self._err("Précise ta question sur le document.")
+        return self.dr.read_and_answer(path, question)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  WORD — Semaine 10
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _word_create(self, p):
+        """Crée un document Word structuré."""
+        title    = p.get("title") or p.get("name") or "Document"
+        sections = p.get("sections") or []
+        filename = p.get("filename") or p.get("output") or None
+        style    = p.get("style") or "professionnel"
+        raw      = str(p.get("_raw_command", "")).lower()
+
+        # Si pas de sections fournies mais contenu texte → créer une section simple
+        if not sections and (p.get("content") or p.get("text")):
+            sections = [{"heading": "", "content": p.get("content") or p.get("text", "")}]
+        if not sections:
+            return self._err(
+                "Précise le contenu du document. "
+                "Exemple : 'crée un document Word avec le titre X et le contenu Y'."
+            )
+        return self.wm.create_document(
+            title=title, sections=sections, filename=filename,
+            style=style, open_after=True
+        )
+
+    def _word_edit(self, p):
+        """Modifie un document Word existant."""
+        path    = p.get("path") or p.get("file") or ""
+        action  = p.get("action") or "append"
+        content = p.get("content") or p.get("text") or ""
+        search  = p.get("search") or p.get("find") or ""
+        replace = p.get("replace") or ""
+        heading = p.get("heading") or ""
+        if not path:
+            return self._err("Précise le fichier Word à modifier.")
+        return self.wm.edit_document(
+            path=path, action=action, content=content,
+            search=search, replace=replace, heading=heading
+        )
+
+    def _word_export_pdf(self, p):
+        """Exporte un .docx en PDF."""
+        path   = p.get("path") or p.get("file") or p.get("source") or ""
+        output = p.get("output") or p.get("dest") or None
+        if not path:
+            return self._err("Précise le fichier Word à exporter en PDF.")
+        return self.wm.export_to_pdf(path, output_path=output)
+
+    def _cv_create(self, p):
+        """
+        Génère un CV professionnel complet.
+
+        Groq collecte les infos et les passe en params :
+          name, title, email, phone, summary, experience[], education[], skills{}, etc.
+        Si les infos sont manquantes → retourner une question à l'utilisateur.
+        """
+        info = {
+            "name":       p.get("name") or p.get("prenom_nom") or "",
+            "title":      p.get("title") or p.get("poste") or p.get("role") or "",
+            "email":      p.get("email") or "",
+            "phone":      p.get("phone") or p.get("tel") or p.get("telephone") or "",
+            "address":    p.get("address") or p.get("adresse") or "",
+            "linkedin":   p.get("linkedin") or "",
+            "github":     p.get("github") or "",
+            "summary":    p.get("summary") or p.get("resume") or p.get("profil") or "",
+            "experience": p.get("experience") or p.get("experiences") or [],
+            "education":  p.get("education") or p.get("formation") or [],
+            "skills":     p.get("skills") or p.get("competences") or {},
+            "languages":  p.get("languages") or p.get("langues") or [],
+            "certifs":    p.get("certifs") or p.get("certifications") or [],
+            "projects":   p.get("projects") or p.get("projets") or [],
+        }
+
+        # Vérifier les infos minimales
+        if not info["name"]:
+            return self._ok(
+                "Pour créer ton CV, j'ai besoin de quelques informations. "
+                "Commence par : quel est ton nom complet ?",
+                {
+                    "awaiting_choice": True,
+                    "choices": ["Donne ton nom", "Annule"],
+                    "pending_intent": "CV_CREATE",
+                    "pending_params": p,
+                    "step": "collect_name",
+                }
+            )
+
+        filename = p.get("filename") or None
+        output   = p.get("output_dir") or None
+        return self.wm.create_cv(info=info, filename=filename, output_dir=output, open_after=True)
+
+    def _report_create(self, p):
+        """Génère un rapport Word professionnel."""
+        title   = p.get("title") or p.get("name") or "Rapport"
+        content = p.get("content") or p.get("text") or {}
+        filename = p.get("filename") or None
+        if not content:
+            return self._err("Précise le contenu du rapport.")
+        return self.wm.create_report(
+            title=title, content=content, filename=filename, open_after=True
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  EXCEL — Semaine 10
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _excel_create(self, p):
+        """Crée un fichier Excel avec données."""
+        title    = p.get("title") or p.get("name") or "Classeur"
+        sheets   = p.get("sheets") or []
+        filename = p.get("filename") or p.get("output") or None
+
+        # Cas simple : headers + rows directement dans params
+        if not sheets and (p.get("headers") or p.get("rows")):
+            sheets = [{
+                "name":    p.get("sheet_name") or "Données",
+                "headers": p.get("headers") or [],
+                "rows":    p.get("rows") or [],
+                "totals":  p.get("totals", False),
+            }]
+        if not sheets:
+            return self._err(
+                "Précise les données à mettre dans le fichier Excel. "
+                "Exemple : 'crée un Excel avec les colonnes Nom, Prénom, Âge'."
+            )
+        return self.em.create_spreadsheet(
+            title=title, sheets=sheets, filename=filename, open_after=True
+        )
+
+    def _excel_read(self, p):
+        """Lit les données d'un fichier Excel."""
+        path  = p.get("path") or p.get("file") or ""
+        sheet = p.get("sheet") or p.get("sheet_name") or None
+        if not path:
+            return self._err("Précise le fichier Excel à lire.")
+        return self.em.read_spreadsheet(path, sheet_name=sheet)
+
+    def _excel_report(self, p):
+        """Génère un rapport Excel depuis des données."""
+        title    = p.get("title") or p.get("name") or "Rapport"
+        data     = p.get("data") or p.get("rows") or []
+        filename = p.get("filename") or None
+        if not data:
+            return self._err("Précise les données du rapport.")
+        return self.em.create_report(
+            title=title, data=data, filename=filename, open_after=True
+        )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  PDF — Semaine 10
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _pdf_extract(self, p):
+        """Extrait des pages ou du texte d'un PDF."""
+        path  = p.get("path") or p.get("file") or ""
+        pages = p.get("pages") or p.get("page") or None
+        mode  = p.get("mode") or "text"  # "text" ou "file"
+        if not path:
+            return self._err("Précise le fichier PDF.")
+        if mode == "file":
+            return self.pm.extract_pages(path, pages=pages, open_after=False)
+        return self.pm.extract_text_by_page(path, pages=pages)
+
+    def _pdf_merge(self, p):
+        """Fusionne plusieurs PDF."""
+        paths  = p.get("paths") or p.get("files") or []
+        output = p.get("output") or p.get("dest") or None
+        if not paths:
+            return self._err("Précise les fichiers PDF à fusionner.")
+        return self.pm.merge(paths=paths, output_path=output, open_after=False)
+
+    def _pdf_split(self, p):
+        """Découpe un PDF."""
+        path     = p.get("path") or p.get("file") or ""
+        split_at = p.get("split_at") or p.get("page") or None
+        output   = p.get("output_dir") or None
+        if not path:
+            return self._err("Précise le fichier PDF à découper.")
+        return self.pm.split(path=path, split_at=split_at, output_dir=output)
+
+    def _pdf_search(self, p):
+        """Recherche un mot dans un PDF."""
+        path    = p.get("path") or p.get("file") or ""
+        keyword = p.get("keyword") or p.get("query") or p.get("word") or ""
+        if not path:
+            return self._err("Précise le fichier PDF.")
+        if not keyword:
+            return self._err("Précise le mot à chercher.")
+        return self.pm.search(path=path, keyword=keyword)
+
+    def _pdf_info(self, p):
+        """Retourne les infos d'un PDF."""
+        path = p.get("path") or p.get("file") or ""
+        if not path:
+            return self._err("Précise le fichier PDF.")
+        return self.pm.get_info(path)
+
     # ══════════════════════════════════════════════════════════════════════════
     #  ÉCRAN
     # ══════════════════════════════════════════════════════════════════════════
@@ -1912,6 +2194,112 @@ class IntentExecutor:
             return ScreenManager().record_screen(duration=p.get("duration", 30))
         except Exception:
             return self._err(f"Enregistrement écran indisponible.")
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  VISION (Semaine 13)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _vision_read_screen(self, p):
+        """Lit le texte à l'écran via OCR."""
+        try:
+            from modules.vision_manager import VisionManager
+            vm = VisionManager()
+            result = vm.read_screen_text()
+            
+            if not result.full_text:
+                return self._err("Aucun texte détecté à l'écran.")
+            
+            # Retourner les premiers 1000 caractères
+            text_preview = result.full_text[:1000]
+            return self._ok(
+                f"Texte lu de l'écran ({len(result.elements)} éléments détectés).",
+                {
+                    "text": text_preview,
+                    "element_count": len(result.elements),
+                    "processing_time_ms": result.processing_time_ms,
+                }
+            )
+        except ImportError as e:
+            return self._err(f"Module vision non disponible: {e}")
+        except Exception as e:
+            return self._err(f"Erreur lecture écran: {e}")
+
+    def _vision_click_text(self, p):
+        """Clique sur un élément par son texte."""
+        target = p.get("text") or p.get("target") or ""
+        if not target:
+            return self._err("Précise le texte sur lequel cliquer.")
+        
+        try:
+            from modules.vision_manager import VisionManager
+            vm = VisionManager()
+            
+            fuzzy = p.get("fuzzy", True)
+            result = vm.click_element(target, fuzzy=fuzzy)
+            
+            if result.get("success"):
+                return self._ok(
+                    f"Cliqué sur '{target}'",
+                    {"position": result.get("position"), "element": result.get("element")}
+                )
+            else:
+                return self._err(result.get("message", "Élément non trouvé."))
+        except ImportError:
+            return self._err("Module vision non disponible.")
+        except Exception as e:
+            return self._err(f"Erreur clic: {e}")
+
+    def _vision_summarize(self, p):
+        """Résume le contenu de l'écran."""
+        try:
+            from modules.vision_manager import VisionManager
+            vm = VisionManager()
+            result = vm.summarize_screen()
+            return result
+        except ImportError:
+            return self._err("Module vision non disponible.")
+        except Exception as e:
+            return self._err(f"Erreur résumé écran: {e}")
+
+    def _vision_find_button(self, p):
+        """Trouve un bouton à l'écran."""
+        button = p.get("button") or p.get("text") or ""
+        if not button:
+            return self._err("Précise le nom du bouton à trouver.")
+        
+        try:
+            from modules.vision_manager import VisionManager
+            vm = VisionManager()
+            elements = vm.find_button(button)
+            
+            if not elements:
+                return self._err(f"Bouton '{button}' non trouvé.")
+            
+            buttons = [e.to_dict() for e in elements]
+            return self._ok(
+                f"{len(buttons)} bouton(s) '{button}' trouvé(s).",
+                {"buttons": buttons}
+            )
+        except ImportError:
+            return self._err("Module vision non disponible.")
+        except Exception as e:
+            return self._err(f"Erreur recherche bouton: {e}")
+
+    def _vision_extract_links(self, p):
+        """Extrait les liens de l'écran."""
+        try:
+            from modules.vision_manager import VisionManager
+            vm = VisionManager()
+            links = vm.extract_links()
+            
+            return self._ok(
+                f"{len(links)} lien(s) extrait(s).",
+                {"links": links}
+            )
+        except ImportError:
+            return self._err("Module vision non disponible.")
+        except Exception as e:
+            return self._err(f"Erreur extraction liens: {e}")
 
     # ══════════════════════════════════════════════════════════════════════════
     #  HISTORIQUE / MACROS
@@ -1965,6 +2353,64 @@ class IntentExecutor:
         if not name:
             return self._err("Précise le nom de la macro à supprimer.")
         return self.macros.delete_macro(name)
+
+    def _workflow_run(self, p):
+        name = p.get("name") or p.get("workflow") or ""
+        if not name:
+            return self._err("Précise le nom du workflow à exécuter.")
+        
+        context = p.get("context") or {}
+        
+        if self._raw_command_agent is None:
+            return self._err("Exécution workflow indisponible : agent manquant.")
+        
+        from core.workflow_engine import WorkflowEngine
+        we = WorkflowEngine(
+            executor=self,
+            browser_control=self.bc if hasattr(self, '_bc') and self._bc else None,
+            word_manager=None,
+            email_client=None,
+        )
+        return we.execute_workflow(name, context, agent=self._raw_command_agent)
+
+    def _workflow_list(self, p):
+        from core.workflow_engine import WorkflowEngine
+        we = WorkflowEngine()
+        return we.list_workflows()
+
+    def _workflow_register(self, p):
+        from core.workflow_engine import WorkflowEngine
+        name = p.get("name") or ""
+        steps = p.get("steps") or []
+        description = p.get("description", "")
+        
+        if not name:
+            return self._err("Précise le nom du workflow.")
+        if not steps:
+            return self._err("Précise les étapes du workflow.")
+        
+        we = WorkflowEngine()
+        return we.register_workflow(name, steps, description)
+
+    def _record_start(self, p):
+        name = p.get("name") or ""
+        if not name:
+            return self._err("Précise le nom de l'enregistrement.")
+        
+        from core.workflow_engine import MacroRecorder
+        self._recorder = MacroRecorder(macro_manager=self.macros)
+        self._recorder.start(name)
+        return self._ok(f"Recording started: {name}", {"recording": True, "name": name})
+
+    def _record_stop(self, p):
+        if not hasattr(self, '_recorder') or self._recorder is None:
+            return self._err("Aucun enregistrement en cours.")
+        
+        name = p.get("name") or ""
+        description = p.get("description", "")
+        result = self._recorder.stop(name, description)
+        self._recorder = None
+        return result
 
     # ══════════════════════════════════════════════════════════════════════════
     #  AIDE & INCONNU
@@ -2203,6 +2649,30 @@ class IntentExecutor:
         return self._dr
 
     @property
+    def wm(self):
+        """WordManager — lazy init."""
+        if not hasattr(self, '_wm') or self._wm is None:
+            from modules.word_manager import WordManager
+            self._wm = WordManager()
+        return self._wm
+
+    @property
+    def em(self):
+        """ExcelManager — lazy init."""
+        if not hasattr(self, '_em') or self._em is None:
+            from modules.excel_manager import ExcelManager
+            self._em = ExcelManager()
+        return self._em
+
+    @property
+    def pm(self):
+        """PDFManager — lazy init."""
+        if not hasattr(self, '_pm') or self._pm is None:
+            from modules.pdf_manager import PDFManager
+            self._pm = PDFManager()
+        return self._pm
+
+    @property
     def nm(self):
         if self._nm is None:
             from modules.network_manager import NetworkManager
@@ -2281,6 +2751,249 @@ class IntentExecutor:
         out_data["count"]   = out_data.get("count", len(normalized))
         out["data"]         = out_data
         return out
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  EMAIL (Outlook)
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _get_outlook_client(self):
+        from core.email_outlook import get_outlook_client
+        return get_outlook_client()
+
+    def _email_inbox(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte. Assure-toi quOutlook est ouvert.", data={"connected": False})
+
+        limit = int(params.get("limit", 10))
+        unread_only = bool(params.get("unread_only", False))
+        emails = client.get_inbox(limit=limit, unread_only=unread_only)
+
+        display = []
+        for e in emails:
+            unread_tag = "[NON LU] " if e.get("unread") else ""
+            display.append(f"{unread_tag}De: {e.get('sender_name')} | Sujet: {e.get('subject')} | {e.get('date')}")
+
+        return {
+            "success": True,
+            "message": f"{len(emails)} email(s) dans la boite de reception.",
+            "data": {"emails": emails, "count": len(emails), "display": "\n".join(display)},
+        }
+
+    def _email_send(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        to = params.get("to", "")
+        subject = params.get("subject", "")
+        body = params.get("body", "")
+        cc = params.get("cc", "")
+
+        if not to:
+            return self._err("Destinataire manquant. Precise 'a qui'.")
+
+        result = client.send_email(to=to, subject=subject, body=body, cc=cc)
+        return result
+
+    def _email_reply(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        email_id = params.get("email_id", "")
+        body = params.get("body", "")
+        to_all = bool(params.get("to_all", False))
+
+        if not email_id:
+            return self._err("ID de lemail manquant pour la reponse.")
+        return client.reply_email(email_id, body=body, to_all=to_all)
+
+    def _email_forward(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        email_id = params.get("email_id", "")
+        to = params.get("to", "")
+        body = params.get("body", "")
+
+        if not email_id or not to:
+            return self._err("ID email ou destinataire manquant.")
+        return client.forward_email(email_id, to=to, body=body)
+
+    def _email_search(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        query = params.get("query", "")
+        folder = params.get("folder", "inbox")
+        if not query:
+            return self._err("Requete de recherche manquante.")
+
+        emails = client.search_emails(query=query, folder=folder)
+        display = [f"De: {e.get('sender_name')} | Sujet: {e.get('subject')}" for e in emails]
+        return {
+            "success": True,
+            "message": f"{len(emails)} resultat(s) pour '{query}'.",
+            "data": {"emails": emails, "count": len(emails), "display": "\n".join(display)},
+        }
+
+    def _email_mark_read(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+        email_id = params.get("email_id", "")
+        if not email_id:
+            return self._err("ID de lemail manquant.")
+        return client.mark_as_read(email_id)
+
+    def _email_mark_unread(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+        email_id = params.get("email_id", "")
+        if not email_id:
+            return self._err("ID de lemail manquant.")
+        return client.mark_as_unread(email_id)
+
+    def _email_draft(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        to = params.get("to", "")
+        subject = params.get("subject", "")
+        body = params.get("body", "")
+        return client.create_draft(to=to, subject=subject, body=body)
+
+    def _email_attach_file(self, params: dict) -> dict:
+        return self._err("Joindre un fichier a un email necessite de le faire manuellement dans Outlook.")
+
+    def _email_summary(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        summary = client.get_summary()
+        return {
+            "success": True,
+            "message": f"Boite: {summary.get('total', 0)} emails, {summary.get('unread', 0)} non lus.",
+            "data": summary,
+        }
+
+    def _email_important(self, params: dict) -> dict:
+        from core.email_outlook import get_outlook_client
+        from communication.notification_sender import NotificationSender
+
+        client = get_outlook_client()
+        if not client.is_connected:
+            return self._err("Outlook nest pas connecte.")
+
+        hours = int(params.get("hours", 24))
+        emails = client.get_important_emails(hours=hours)
+
+        # Notification intelligente sur mobile
+        try:
+            sender = NotificationSender()
+            if emails:
+                title = "Email important détecté"
+                body = f"{len(emails)} email(s) important(s) trouvés dans les {hours} dernières heures."
+                sender.send(title, body, data={"emails_count": len(emails), "source": "email_important"}, type="task_done")
+        except Exception as e:
+            logger.warning(f"Impossible d'envoyer notification SMS/email important: {e}")
+
+        display = [f"De: {e.get('sender_name')} | Sujet: {e.get('subject')}" for e in emails]
+        return {
+            "success": True,
+            "message": f"{len(emails)} email(s) important(s) recents.",
+            "data": {"emails": emails, "count": len(emails), "display": "\n".join(display)},
+        }
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  TELEGRAM
+    # ══════════════════════════════════════════════════════════════════════════
+
+    def _telegram_send(self, params: dict) -> dict:
+        from core.telegram_bot import get_telegram_bot
+
+        message = params.get("message", "") or params.get("body", "") or ""
+        chat_id = params.get("chat_id", "")
+
+        if not message:
+            return self._err("Message Telegram manquant.")
+
+        bot = get_telegram_bot()
+        if not bot or not bot.is_connected:
+            return self._err("Bot Telegram non configure ou non connecte.")
+
+        result = bot.send_message(chat_id=chat_id or bot._allowed_chat_id, text=message)
+        if result.get("success"):
+            return self._ok("Message Telegram envoye", data=result)
+        return self._err(result.get("message", "Erreur envoi Telegram"), data=result)
+
+    def _telegram_notify(self, params: dict) -> dict:
+        from core.telegram_bot import get_telegram_bot, get_jarvis_bridge
+
+        title = params.get("title", "") or "Notification Jarvis"
+        message = params.get("message", "") or ""
+        bridge = get_jarvis_bridge()
+
+        if not bridge:
+            return self._err("Pont Jarvis-Telegram non disponible.")
+
+        if title:
+            message = f"{title}\n{message}"
+
+        result = bridge.notify_system_alert("info", message)
+        if result.get("success"):
+            return self._ok("Notification Telegram envoyee", data=result)
+        return self._err("Erreur envoi notification", data=result)
+
+    def _telegram_alert(self, params: dict) -> dict:
+        from core.telegram_bot import get_jarvis_bridge
+
+        alert_type = params.get("alert_type", "info")
+        message = params.get("message", "") or ""
+
+        if not message:
+            return self._err("Message d'alerte manquant.")
+
+        bridge = get_jarvis_bridge()
+        if not bridge:
+            return self._err("Pont Jarvis-Telegram non disponible.")
+
+        result = bridge.notify_system_alert(alert_type, message)
+        if result.get("success"):
+            return self._ok(f"Alerte {alert_type} Telegram envoyee", data=result)
+        return self._err("Erreur envoi alerte", data=result)
+
+    def _telegram_status(self, params: dict) -> dict:
+        from core.telegram_bot import get_telegram_bot
+
+        bot = get_telegram_bot()
+        if not bot:
+            return {
+                "success": True,
+                "message": "Bot Telegram non configure. Ajoute TELEGRAM_BOT_TOKEN dans .env",
+                "data": {"connected": False, "configured": False},
+            }
+
+        return {
+            "success": True,
+            "message": f"Bot Telegram: {'Connecte' if bot.is_connected else 'Non connecte'}",
+            "data": {"connected": bot.is_connected, "configured": bool(bot._token)},
+        }
 
     @staticmethod
     def _ok(message: str, data=None) -> dict:
