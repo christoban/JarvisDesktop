@@ -1,8 +1,8 @@
 {
-  "last_session": "2026-03-27 20:49",
+  "last_session": "2026-03-28 11:42",
   "preferences": {
     "app_counts": {
-      "chrome": 6
+      "chrome": 7
     },
     "favorite_apps": [
       "chrome"
@@ -17,11 +17,18 @@
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-27 20:50"
+      "learned": "2026-03-28 11:42"
     }
   },
   "events": {
     "app": [
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774694552,
+        "datetime": "2026-03-28 11:42"
+      },
       {
         "name": "chrome",
         "pid": null,
@@ -96,6 +103,13 @@
     ],
     "system": [
       {
+        "intent": "SYSTEM_TIME",
+        "action": "system_time",
+        "delay_seconds": null,
+        "timestamp": 1774694615,
+        "datetime": "2026-03-28 11:43"
+      },
+      {
         "intent": "SYSTEM_INFO",
         "action": "system_info",
         "delay_seconds": null,
@@ -136,9 +150,9 @@
     ]
   },
   "stats": {
-    "session_count": 19,
-    "total_commands": 14
+    "session_count": 21,
+    "total_commands": 16
   },
-  "session_count": 19,
-  "_saved_at": "2026-03-27 20:50:44"
+  "session_count": 21,
+  "_saved_at": "2026-03-28 11:43:35"
 }

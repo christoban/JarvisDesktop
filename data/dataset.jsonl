@@ -25,3 +25,6 @@
 {"timestamp": "2026-03-27T20:50:45.993451", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "WINDOW_CLOSE", "params": {"query": "chrome"}, "confidence": 0.99, "source": "groq"}
 {"timestamp": "2026-03-27T20:50:47.605454", "input": "referme la fenetre que tu viens d'ouvrir", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
 {"timestamp": "2026-03-27T20:50:50.223447", "input": "ferme le nouvel onglet", "intent": "WINDOW_CLOSE", "params": {}, "confidence": 0.95, "source": "llm"}
+{"timestamp": "2026-03-28T11:42:32.959330", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {}, "confidence": 0.9, "source": "fast_intent"}
+{"timestamp": "2026-03-28T11:42:56.393331", "input": "non, ouvre un nouvel onglet sur la fenetre chrome actuelle", "intent": "FOLLOWUP", "params": {}, "confidence": 0.95, "source": "context"}
+{"timestamp": "2026-03-28T11:43:35.922900", "input": "Jarvis > 2026-03-28 11:42:58 | ERROR    | core.telegram_bot              | Erreur fetch_updates: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=35)", "intent": "SYSTEM_TIME", "params": {}, "confidence": 0.95, "source": "llm"}
