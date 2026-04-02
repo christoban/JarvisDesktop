@@ -38,3 +38,30 @@
 {"timestamp": "2026-03-28T17:58:51.038648", "input": "Liste mes playlists", "intent": "MUSIC_PLAYLIST_LIST", "params": {}, "confidence": 0.9, "source": "telegram"}
 {"timestamp": "2026-03-28T17:59:36.193868", "input": "Joue la playlist testament de louange", "intent": "MUSIC_PLAYLIST_PLAY", "params": {"name": "testament de louange"}, "confidence": 0.99, "source": "telegram"}
 {"timestamp": "2026-03-28T18:00:27.705675", "input": "Mets la pause", "intent": "MUSIC_PAUSE", "params": {}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-03-28T22:10:25.117712", "input": "recherche youtube tu cherche loveline ngeh sur youtube", "intent": "BROWSER_SEARCH_YOUTUBE", "params": {"query": "tu cherche loveline ngeh sur youtube"}, "confidence": 0.9, "source": "fast_rules"}
+{"timestamp": "2026-03-28T22:23:36.265732", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T22:24:05.607675", "input": "ouvre un nouvel onglet, pas une nouvelle fenetre", "intent": "BROWSER_NEW_TAB", "params": {"count": 1, "browser": "chrome"}, "confidence": 0.95, "source": "groq"}
+{"timestamp": "2026-03-28T22:34:47.948193", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:03:01.544817", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:05:27.144261", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:13:52.014517", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:20:22.676514", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:24:11.412304", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:27:54.376130", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:33:18.811798", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:37:05.266822", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-28T23:37:44.799441", "input": "non, ouvre plutot un nouvel onglet", "intent": "BROWSER_NEW_TAB", "params": {"count": 1, "browser": "chrome"}, "confidence": 0.95, "source": "groq"}
+{"timestamp": "2026-03-28T23:37:55.342909", "input": "ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "groq"}
+{"timestamp": "2026-03-29T11:29:00.494752", "input": "Ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-03-29T11:30:04.184083", "input": "Ouvre un nouvel onglet", "intent": "BROWSER_NEW_TAB", "params": {"count": 1, "browser": "chrome"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T11:30:32.200818", "input": "Ouvre un nouvel onglet", "intent": "BROWSER_NEW_TAB", "params": {"count": 1, "browser": "chrome"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T11:30:55.184510", "input": "Ouvre un nouvel onglet", "intent": "BROWSER_NEW_TAB", "params": {"count": 1, "browser": "chrome"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T11:31:13.922954", "input": "Ouvre un nouvel onglet", "intent": "BROWSER_NEW_TAB", "params": {"count": 1, "browser": "chrome"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T14:38:21.522388", "input": "Ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-03-29T14:43:41.265874", "input": "Ouvre chrome", "intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-03-29T14:47:45.958078", "input": "Sur l'onglet de Wikipédia, cherche Goethe institut", "intent": "BROWSER_SEARCH", "params": {"query": "Goethe institut", "engine": "wikipedia"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T14:48:43.310820", "input": "Oui", "intent": "BROWSER_OPEN", "params": {"url": "https://www.goethe.de/frfr.html"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T14:53:38.991671", "input": "Revient en arrière", "intent": "WINDOW_CLOSE", "params": {"query": "Goethe institut"}, "confidence": 0.95, "source": "telegram"}
+{"timestamp": "2026-03-29T14:57:49.671933", "input": "Aide", "intent": "HELP", "params": {}, "confidence": 0.99, "source": "telegram"}
+{"timestamp": "2026-04-02T13:50:04.841531", "input": "play Bohemian Rhapsody", "intent": "MUSIC_PLAY", "params": {"song": "Bohemian Rhapsody"}, "confidence": 0.98, "source": "groq", "sample_id": "2e9f6ca6676212533ef999c39a6cb9bb91ead033", "quality_gate": "accepted", "quality_flag": "premium"}
+{"timestamp": "2026-04-02T13:50:06.071979", "input": "search for something", "intent": "BROWSER_SEARCH", "params": {"query": "something"}, "confidence": 0.87, "source": "groq", "sample_id": "4613c29b9932d1fd81e0e33a394842e5fc9e4930", "quality_gate": "accepted", "quality_flag": "uncertain_needs_review"}

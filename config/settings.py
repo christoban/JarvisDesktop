@@ -18,7 +18,6 @@ load_dotenv(BASE_DIR / "config" / ".env")
 # ─────────────────────────────────────────
 GROQ_API_KEY      = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL_NAME   = os.getenv("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
-USE_TOOL_CALLS    = os.getenv("USE_TOOL_CALLS", "false").lower() in ("true", "1", "yes")
 #GROQ_BASE_URL     = os.getenv("GROQ_BASE_URL", "")
 
 OPENAI_API_KEY      = os.getenv("OPENAI_API_KEY", "")
@@ -122,6 +121,7 @@ OLLAMA_EMBED_MODEL   = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 LOCAL_LLM_CONFIDENCE = float(os.getenv("LOCAL_LLM_CONFIDENCE", "0.75"))
 EMBED_CONFIDENCE     = float(os.getenv("EMBED_CONFIDENCE", "0.82"))
 DATASET_FILE         = BASE_DIR / "data" / "dataset.jsonl"
+DATASET_RAW_FILE     = BASE_DIR / "data" / "dataset_raw.jsonl"
 EMBED_CACHE_FILE     = BASE_DIR / "data" / "intent_embeddings.json"
 
 

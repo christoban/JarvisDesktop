@@ -343,13 +343,6 @@ def get_agent(wait_timeout=30):
 
 
 def get_tts() -> "TTSEngine":
-    global _agent
-    with _agent_lock:
-        if _agent is None and AGENT_AVAILABLE:
-            _agent = Agent()
-    return _agent
-
-def get_tts() -> "TTSEngine":
     global _tts
     with _agent_lock:
         if _tts is None and TTS_AVAILABLE:

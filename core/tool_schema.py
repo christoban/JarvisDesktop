@@ -71,7 +71,6 @@ def build_tool_schemas() -> List[Dict[str, Any]]:
             
             prop = {
                 "type": json_type,
-                "description": f"Parameter {param_name}"
             }
             
             # Pour les arrays, préciser le type des items

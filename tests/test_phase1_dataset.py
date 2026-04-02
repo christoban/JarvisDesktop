@@ -1,70 +1,90 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
-Test complet du pipeline hybride Phase 1
-Vérifie que le dataset logging fonctionne correctement
+Tests anti-pollution dataset (Sprint 2).
+Valide la quarantaine raw/clean, les rejets critiques et les doublons.
 """
 
-import sys
 from pathlib import Path
+import sys
 
-# Ajouter le parent à sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.dataset_builder import save_entry, load_examples, get_stats
-from config.logger import get_logger
+import core.dataset_builder as ds
 
-logger = get_logger(__name__)
 
-def test_dataset_logging():
-    """Test que les entrées sont bien sauvegardées dans le dataset"""
-    print("\n=== TEST DATASET LOGGING ===\n")
-    
-    test_cases = [
-        {
-            "input": "ouvre chrome",
-            "result": {"intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.95},
-            "source": "test"
-        },
-        {
-            "input": "joue ma playlist jazz",
-            "result": {"intent": "MUSIC_PLAYLIST_PLAY", "params": {"playlist_name": "jazz"}, "confidence": 0.92},
-            "source": "test"
-        },
-        {
-            "input": "quelle heure est-il",
-            "result": {"intent": "SYSTEM_TIME", "params": {}, "confidence": 0.99},
-            "source": "test"
-        },
-        {
-            "input": "crée un dossier sur le bureau",
-            "result": {"intent": "FOLDER_CREATE", "params": {"path": "dossier", "location": "Desktop"}, "confidence": 0.88},
-            "source": "test"
-        },
-    ]
-    
-    saved_count = 0
-    for tc in test_cases:
-        result = save_entry(tc["input"], tc["result"], source=tc["source"])
-        if result:
-            saved_count += 1
-            print(f"✅ Sauvegardé: '{tc['input']}' → {tc['result']['intent']}")
-        else:
-            print(f"❌ Non sauvegardé: '{tc['input']}'")
-    
-    print(f"\n{saved_count}/{len(test_cases)} entrées sauvegardées\n")
-    
-    # Afficher les stats
-    stats = get_stats()
-    print(f"Stats dataset: {stats['total']} entrées")
-    print(f"Intents: {stats['intents']}\n")
-    
-    # Charger les exemples
-    examples = load_examples(n=10, min_confidence=0.80)
-    print(f"Exemples chargés: {len(examples)}")
-    for ex in examples[:3]:
-        print(f"  - {ex['input']} → {ex['intent']}")
-    print()
+def _reset_runtime_state() -> None:
+    ds._seen_hashes.clear()
+    ds._seen_loaded = False
 
-if __name__ == "__main__":
-    test_dataset_logging()
-    print("✅ Test complet")
+
+def _jsonl_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return sum(1 for _ in path.open(encoding="utf-8"))
+
+
+def test_reject_followup_and_log_lines(tmp_path):
+    ds.DATASET_FILE = tmp_path / "dataset.jsonl"
+    ds.DATASET_RAW_FILE = tmp_path / "dataset_raw.jsonl"
+    _reset_runtime_state()
+
+    ok_followup = ds.save_entry(
+        "non ouvre un nouvel onglet plutot",
+        {"intent": "FOLLOWUP", "params": {}, "confidence": 0.95},
+        source="context",
+    )
+    ok_logline = ds.save_entry(
+        "2026-03-28 11:42:58 | ERROR | core.telegram_bot | timeout",
+        {"intent": "SYSTEM_TIME", "params": {}, "confidence": 0.98},
+        source="groq",
+    )
+
+    assert ok_followup is False
+    assert ok_logline is False
+    assert _jsonl_count(ds.DATASET_FILE) == 0
+    assert _jsonl_count(ds.DATASET_RAW_FILE) == 2
+
+
+def test_duplicate_goes_to_raw_not_clean(tmp_path):
+    ds.DATASET_FILE = tmp_path / "dataset.jsonl"
+    ds.DATASET_RAW_FILE = tmp_path / "dataset_raw.jsonl"
+    _reset_runtime_state()
+
+    payload = {
+        "intent": "APP_OPEN",
+        "params": {"app_name": "chrome"},
+        "confidence": 0.99,
+    }
+
+    first = ds.save_entry("ouvre chrome", payload, source="groq")
+    second = ds.save_entry("ouvre chrome", payload, source="groq")
+
+    assert first is True
+    assert second is False
+    assert _jsonl_count(ds.DATASET_FILE) == 1
+    assert _jsonl_count(ds.DATASET_RAW_FILE) == 2
+
+
+def test_quality_report_has_rejection_reasons(tmp_path):
+    ds.DATASET_FILE = tmp_path / "dataset.jsonl"
+    ds.DATASET_RAW_FILE = tmp_path / "dataset_raw.jsonl"
+    _reset_runtime_state()
+
+    ds.save_entry(
+        "ouvre chrome",
+        {"intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99},
+        source="groq",
+    )
+    ds.save_entry(
+        "a",
+        {"intent": "APP_OPEN", "params": {"app_name": "chrome"}, "confidence": 0.99},
+        source="groq",
+    )
+
+    report = ds.get_quality_report()
+
+    assert report["raw_total"] == 2
+    assert report["accepted"] == 1
+    assert report["rejected"] == 1
+    assert "input_too_short" in report["rejection_reasons"]
+    assert report["clean_total"] == 1

@@ -1,0 +1,22 @@
+{
+  "curation": {
+    "raw_rows": 0,
+    "kept": 0,
+    "dropped": 0,
+    "drop_reasons": {},
+    "keep_rate": 0.0
+  },
+  "live_quality": {
+    "raw_total": 0,
+    "accepted": 0,
+    "rejected": 0,
+    "acceptance_rate": 0.0,
+    "rejection_reasons": {},
+    "accepted_by_source": {},
+    "accepted_by_intent": {},
+    "clean_total": 65
+  },
+  "min_confidence": 0.9,
+  "train_output": "E:\\My long journey towards becoming the best programmer ever by God's Grace\\Personal matters\\JarvisWindows\\JarvisDesktop\\data\\dataset_train.jsonl",
+  "raw_input": "E:\\My long journey towards becoming the best programmer ever by God's Grace\\Personal matters\\JarvisWindows\\JarvisDesktop\\data\\dataset_raw.jsonl"
+}

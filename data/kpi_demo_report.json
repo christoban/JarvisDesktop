@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-04-02T13:25:05.646340",
+  "status": {
+    "uptime_minutes": 0,
+    "total_commands": 20,
+    "total_executions": 20,
+    "total_errors": 4,
+    "window_minutes": 60,
+    "recent_window": {
+      "parse_count": 20,
+      "exec_count": 20,
+      "error_count": 4
+    },
+    "idle": false,
+    "top_intents": {
+      "UNKNOWN": 7,
+      "APP_OPEN": 3,
+      "FOLLOWUP": 3,
+      "WINDOW_CLOSE": 2,
+      "BROWSER_NEW_TAB": 1
+    },
+    "confidence": {
+      "avg": 0.816,
+      "min": 0.55,
+      "max": 0.99,
+      "below_threshold": 8
+    },
+    "sources": {
+      "groq": 20
+    },
+    "active_alerts": [
+      "FOLLOWUP_SURGE",
+      "LOW_CONFIDENCE",
+      "UNKNOWN_SURGE",
+      "HIGH_ERROR_RATE"
+    ]
+  },
+  "alerts": {
+    "FOLLOWUP_SURGE": {
+      "severity": "HIGH",
+      "message": "FOLLOWUP rate surge: 15.0% (baseline 5.0%)",
+      "value": 0.15,
+      "threshold": 0.05
+    },
+    "UNKNOWN_SURGE": {
+      "severity": "MEDIUM",
+      "message": "UNKNOWN rate surge: 35.0%",
+      "value": 0.35,
+      "threshold": 0.02
+    },
+    "LOW_CONFIDENCE": {
+      "severity": "MEDIUM",
+      "message": "Average confidence drop: 0.82 (target 0.90)",
+      "value": 0.8160000000000001,
+      "threshold": 0.9
+    },
+    "HIGH_ERROR_RATE": {
+      "severity": "HIGH",
+      "message": "Execution error rate: 20.0%",
+      "value": 0.2,
+      "threshold": 0.01
+    }
+  },
+  "baselines": {
+    "followup_rate": 0.05,
+    "unknown_rate": 0.02,
+    "errors_rate": 0.01,
+    "min_avg_confidence": 0.9
+  }
+}

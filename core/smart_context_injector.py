@@ -19,7 +19,7 @@ class SmartContextInjector:
     
     def build_minimal_system_prompt(self, user_context: str = "") -> str:
         """
-        Construit le prompt système MINIMAL (400 tokens).
+        Construit le prompt système MINIMAL (~200 tokens).
         
         S'utilise UNIQUEMENT comme fallback LLM - 90% des commandes
         sont gérées par Router + SemanticRouter (0 tokens).
@@ -27,25 +27,13 @@ class SmartContextInjector:
         
         context_block = ""
         if user_context:
-            context_block = f"\nCONTEXTE: {user_context[:200]}"
+            context_block = f" | CTX: {user_context[:100]}"
 
-        return f"""Tu es JARVIS, assistant PC. JSON seulement.
+        return f"""JARVIS PC Assistant. JSON output only.
 
-RULES:
-1. APP_OPEN: lancer/ouvrir app (ouvre Chrome) 
-2. FILE_OPEN: ouvrir fichier
-3. FILE_SEARCH: chercher/localiser fichier 
-4. BROWSER_SEARCH: recherche web
-5. BROWSER_OPEN: ouvrir navigateur
-6. MUSIC_PLAY: jouer musique
-7. AUDIO_VOLUME_SET: régler son
-8. SCREEN_BRIGHTNESS: changer lumière
-9. SYSTEM_SHUTDOWN: éteindre
-10. WINDOW_CLOSE: fermer fenêtre
-11. KNOWLEDGE_QA: question générale
-12. MULTI_ACTION: plusieurs actions (et/puis){context_block}
+INTENTS: APP_OPEN, FILE_OPEN, FILE_SEARCH, BROWSER_SEARCH, MUSIC_PLAY, AUDIO_VOLUME_SET, SYSTEM_SHUTDOWN, WINDOW_CLOSE, MULTI_ACTION, KNOWLEDGE_QA{context_block}
 
-OUTPUT: {{"intent": "NAME", "params": {{}}, "confidence": N}}
+OUTPUT: {{"intent":"NAME","params":{{}},"confidence":N}}
 """
 
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from config.logger import get_logger
 from core.dataset_builder import save_entry
 from core.jarvis_memory import JarvisMemory
+from core.kpi_monitor import KPIMonitor
 
 logger = get_logger(__name__)
 
@@ -195,6 +196,7 @@ class Agent:
         self._macros   = MacroManager()
         self._voice    = JarvisVoice()
         self._memory   = JarvisMemory()
+        self._kpi_monitor = KPIMonitor.get_instance()  # ← Quality-first KPI tracking
         logger.info("Agent prêt — tous les modules chargés.")
 
     @property
@@ -232,6 +234,13 @@ class Agent:
             from core.jarvis_voice import JarvisVoice
             self._voice = JarvisVoice()
         return self._voice
+
+    @property
+    def kpi_monitor(self):
+        """KPI Monitor — suivi qualité & dérive (quality-first tracking)."""
+        if self._kpi_monitor is None:
+            self._kpi_monitor = KPIMonitor.get_instance()
+        return self._kpi_monitor
 
     def handle_command(self, command: str, source: str | None = None) -> dict:
         """
@@ -274,6 +283,15 @@ class Agent:
                 data = result.get("data") or {}
                 if not (isinstance(data, dict) and data.get("awaiting_choice")):
                     self.context.clear_pending()
+                
+                # ── KPI TRACKING FOR FOLLOWUP ──────────────────────────────────
+                execution_success = result.get("success", False) is True
+                self.kpi_monitor.record_parse(
+                    command=raw,
+                    result={"intent": followup_intent, "confidence": 0.95, "quality_flag": "followup"}
+                )
+                self.kpi_monitor.record_execute(followup_intent, execution_success)
+                
                 enriched = self._enrich(result, "FOLLOWUP", 0.95, "context")
                 self._save_history_entry(
                     command=raw,
@@ -305,7 +323,15 @@ class Agent:
         intent, params = self._override_intent_with_context(raw, intent, params)
         confidence   = parsed.get("confidence", 0.0)
         parse_source = parsed.get("source",     "fallback")
-        logger.info(f"Intent={intent} conf={confidence:.2f} src={parse_source} params={params}")
+        quality_flag = parsed.get("quality_flag", "standard")  # ← Quality-first tracking
+        logger.info(f"Intent={intent} conf={confidence:.2f} src={parse_source} quality={quality_flag} params={params}")
+
+        # ── RECORD PARSING DANS KPI MONITOR ───────────────────────────────────
+        # Enregistre tous les parsing pour suivi temps réel de qualité
+        self.kpi_monitor.record_parse(
+            command=raw,
+            result={"intent": intent, "confidence": confidence, "quality_flag": quality_flag}
+        )
 
         clarification = self._build_clarification_if_needed(raw, intent, params, confidence, parse_source)
         if clarification is not None:
@@ -356,6 +382,12 @@ class Agent:
         # ── Exécution ─────────────────────────────────────────────────────────
         result = self.executor.execute(intent, params, raw_command=raw, agent=self)
         result = self._normalize_result(result)
+
+        # ── RECORD EXECUTION DANS KPI MONITOR ──────────────────────────────────
+        # Enregistre succès/échec pour suivi de performance
+        execution_success = result.get("success", False) is True
+        self.kpi_monitor.record_execute(intent, execution_success)
+        logger.debug(f"KPI: intent={intent} success={execution_success}")
 
         # ── Réponse naturelle JARVIS — générée dynamiquement par Groq ─────────
         # Plus de if/if/if avec des répliques figées.
@@ -414,10 +446,16 @@ class Agent:
         )
         # ── Dataset logger (Apprentissage Propre) ────────────────────────
         # On sauvegarde l'intention corrigée par l'agent, pas la brute de Groq
+        # Avec quality_flag pour dual-track: premium vs uncertain
         if enriched.get("_confidence", 0) >= 0.80:
             save_entry(
                 input_text=raw,
-                result={"intent": intent, "params": params, "confidence": confidence},
+                result={
+                    "intent": intent,
+                    "params": params,
+                    "confidence": confidence,
+                    "quality_flag": quality_flag  # ← Traçabilité qualité
+                },
                 source=source or parse_source
             )
         return enriched
@@ -478,9 +516,10 @@ class Agent:
             "deuxième": 1, "second": 1, "deux": 1, "two": 1,
             "troisième": 2, "trois": 2, "three": 2,
         }
-        for word, idx in word_numbers.items():
-            if word in r and 0 <= idx < len(choices):
-                return self._open_choice(intent, params, choices[idx])
+        if len(r.split()) <= 3:  # ← seulement pour les réponses courtes
+            for word, idx in word_numbers.items():
+                if word in r and 0 <= idx < len(choices):
+                    return self._open_choice(intent, params, choices[idx])
 
         # ── Résolution par dossier mentionné ──────────────────────────────────
         folder_hints = {
@@ -510,6 +549,23 @@ class Agent:
         ]
         is_rich_reply = len(r.split()) >= 4 or any(v in r for v in action_verbs)
         if is_rich_reply:
+            # CORRECTION : detecter "nouvel onglet" AVANT Groq
+            # Groq voit la question pending et repond APP_OPEN au lieu de BROWSER_NEW_TAB
+            _new_tab_tokens = [
+                "nouvel onglet", "nouveaux onglets", "new tab",
+                "ouvre un onglet", "un onglet", "un nouvel onglet",
+                "plutot un onglet", "plutôt un onglet",
+                "plutot un nouvel onglet", "plutôt un nouvel onglet",
+                "dans la fenetre", "dans la fenêtre",
+                "juste un onglet", "juste un nouvel onglet",
+                "ouvre juste", "ouvre plutot", "ouvre plutôt",
+            ]
+            if any(tok in r for tok in _new_tab_tokens):
+                self.context.clear_pending()
+                return self.executor.execute(
+                    "BROWSER_NEW_TAB", {"count": 1},
+                    raw_command=reply, agent=self
+                )
             # Phrase riche -> vider le pending et retraiter via Groq+contexte.
             self.context.clear_pending()
             # Détecter et mémoriser les faits personnels dans la commande
@@ -1211,6 +1267,7 @@ class Agent:
         on force MUSIC_PLAYLIST_ADD_FOLDER.
         """
         lower = raw.lower().strip()
+        print(f"[DEBUG-AGENT] _override_intent_with_context called: intent={intent!r} raw={raw!r}", flush=True)
 
         # [Fix P1] Override music : ajouter dossier implicite
         music_override = self._override_music_add_folder(lower, intent, params)
@@ -1225,10 +1282,13 @@ class Agent:
             return pref_override
 
         document_override = self._override_document_with_active_context(lower, intent, params)
+        print(f"[DEBUG-AGENT] document_override: {document_override!r}", flush=True)
         if document_override is not None:
             return document_override
 
+        print(f"[DEBUG-AGENT] before browser_action_override: intent={intent!r} lower={lower!r}", flush=True)
         browser_action_override = self._override_browser_action_with_context(lower, intent, params)
+        print(f"[DEBUG-AGENT] browser_action_override result: {browser_action_override!r}", flush=True)
         if browser_action_override is not None:
             return browser_action_override
 

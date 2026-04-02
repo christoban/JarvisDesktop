@@ -106,7 +106,17 @@ class BrowserControl:
         )
 
     def _launch_chrome(self) -> dict:
-        """Lance Chrome avec --remote-debugging-port=9222."""
+        """
+        Lance Chrome avec --remote-debugging-port=9222.
+
+        CORRECTION CRITIQUE : utilise le même --user-data-dir que CDPSession
+        (_launch_debug_chrome) pour garantir qu'une seule instance Chrome tourne.
+        Avant : browser_control lançait Chrome sans --user-data-dir → profil
+        par défaut → potentiellement une 2e fenêtre Chrome séparée du CDP,
+        ce qui faisait que Ctrl+T s'appliquait à la mauvaise fenêtre (Image 2).
+        Après : même profil JarvisChrome → une seule fenêtre → Ctrl+T garanti
+        dans la fenêtre contrôlée par Jarvis (Image 1).
+        """
         import platform
         system     = platform.system().lower()
         paths      = CHROME_PATHS.get("windows" if system == "windows" else system, [])
@@ -124,13 +134,18 @@ class BrowserControl:
         if not chrome_exe:
             return self._err("Chrome introuvable. Installe Google Chrome ou ajoute-le au PATH.")
 
+        # Même profil que CDPSession._launch_debug_chrome() — UNE SEULE instance
+        profile_dir = Path.home() / "AppData" / "Local" / "JarvisChrome"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+
         try:
             args = [
                 chrome_exe,
                 f"--remote-debugging-port={CDP_PORT}",
+                "--remote-allow-origins=*",
+                f"--user-data-dir={profile_dir}",   # ← même profil que CDPSession
                 "--no-first-run",
                 "--no-default-browser-check",
-                "--disable-extensions",
                 "--disable-popup-blocking",
             ]
             subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

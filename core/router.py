@@ -458,22 +458,52 @@ def refine_params_from_command(command: str, last_params: dict, intent: str = ""
 def handle_correction(command: str, context_memory) -> RouterResult:
     """
     Gère les corrections/modifications basées sur le contexte.
-    
-    Si l'utilisateur dit "non, plutôt..." ou "attends, pas ça",
-    on utilise l'intention précédente mais avec params modifiés.
+
+    CORRECTION : si la commande contient des mots-clés qui correspondent
+    clairement à un intent différent, on change l'intent au lieu de garder
+    l'intent précédent avec des params raffinés.
+    Exemple : "non, ouvre un nouvel onglet" -> BROWSER_NEW_TAB
+              même si le frame précédent était APP_OPEN.
     """
+    import re as _re
     frame = context_memory.get_current_frame()
-    
+
     if not frame:
-        # Pas de contexte précédent
         return None
-    
-    # Affiner les params avec les mots-clés de la nouvelle commande
-    # Passer l'intent pour un refinement intelligent basé sur le type d'intention
+
+    cmd_lower = command.lower()
+
+    # ---- Remplacement d'intent explicite ----
+    INTENT_OVERRIDES = [
+        (r"nouvel?\s+onglet|new\s+tab|ouvre\s+(?:juste\s+)?(?:un\s+)?onglet",
+         "BROWSER_NEW_TAB", {}),
+        (r"ferme\s+(?:l'|cet\s+)?onglet|close\s+tab",
+         "BROWSER_CLOSE_TAB", {}),
+        (r"nouvelle\s+fen[e\xea]tre|new\s+window",
+         "BROWSER_OPEN", {"action": "new_window"}),
+        (r"incognito|fen[e\xea]tre\s+priv[e\xe9]e",
+         "BROWSER_OPEN", {"action": "incognito"}),
+    ]
+
+    for pattern, new_intent, extra_params in INTENT_OVERRIDES:
+        if _re.search(pattern, cmd_lower):
+            logger.info(
+                f"[Router] Correction intent override: "
+                f"{frame.intent} -> {new_intent}"
+            )
+            # source="llm" pour bypasser _validate_non_llm_result()
+            # qui appellerait Groq et ecraserait notre correction
+            return RouterResult(
+                intent=new_intent,
+                params=extra_params,
+                confidence=0.97,
+                source="llm"
+            )
+
+    # ---- Raffinement classique (meme intent, params modifies) ----
     refined_params = refine_params_from_command(command, frame.params, intent=frame.intent)
-    
-    logger.info(f"[Router] 🔄 Correction detected → {frame.intent} (refined params)")
-    
+    logger.info(f"[Router] Correction detected -> {frame.intent} (refined params)")
+
     return RouterResult(
         intent=frame.intent,
         params=refined_params,

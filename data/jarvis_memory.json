@@ -1,8 +1,8 @@
 {
-  "last_session": "2026-03-28 18:06",
+  "last_session": "2026-04-02 14:52",
   "preferences": {
     "app_counts": {
-      "chrome": 14,
+      "chrome": 33,
       "bloc-notes": 3
     },
     "favorite_apps": [
@@ -11,21 +11,21 @@
     ],
     "folder_counts": {
       "E:\\": 1,
-      "C:\\Users\\Public\\Desktop": 1,
+      "C:\\Users\\Public\\Desktop": 2,
       "Bureau\\JarvisDesktop": 1,
       "C:\\Users\\USER\\Documents": 2
     },
     "favorite_folders": [
+      "C:\\Users\\Public\\Desktop",
       "C:\\Users\\USER\\Documents",
-      "E:\\",
-      "C:\\Users\\Public\\Desktop"
+      "E:\\"
     ],
     "volume": 30
   },
   "facts": {
     "favorite_app": {
       "value": "chrome",
-      "learned": "2026-03-28 17:47"
+      "learned": "2026-04-02 14:57"
     },
     "prenom": {
       "value": "Christophe",
@@ -365,6 +365,139 @@
         "name": "chrome",
         "pid": null,
         "args": [],
+        "timestamp": 1775134629,
+        "datetime": "2026-04-02 14:57"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1775134352,
+        "datetime": "2026-04-02 14:52"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1775134102,
+        "datetime": "2026-04-02 14:48"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1775133471,
+        "datetime": "2026-04-02 14:37"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774788221,
+        "datetime": "2026-03-29 14:43"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774787901,
+        "datetime": "2026-03-29 14:38"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774776540,
+        "datetime": "2026-03-29 11:29"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774737475,
+        "datetime": "2026-03-28 23:37"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774737425,
+        "datetime": "2026-03-28 23:37"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774737198,
+        "datetime": "2026-03-28 23:33"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774736874,
+        "datetime": "2026-03-28 23:27"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774736651,
+        "datetime": "2026-03-28 23:24"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774736422,
+        "datetime": "2026-03-28 23:20"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774736031,
+        "datetime": "2026-03-28 23:13"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774735526,
+        "datetime": "2026-03-28 23:05"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774735381,
+        "datetime": "2026-03-28 23:03"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774733687,
+        "datetime": "2026-03-28 22:34"
+      },
+      {
+        "name": "chrome",
+        "pid": 18356,
+        "args": [],
+        "timestamp": 1774733015,
+        "datetime": "2026-03-28 22:23"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
+        "timestamp": 1774731985,
+        "datetime": "2026-03-28 22:06"
+      },
+      {
+        "name": "chrome",
+        "pid": null,
+        "args": [],
         "timestamp": 1774716474,
         "datetime": "2026-03-28 17:47"
       },
@@ -483,6 +616,14 @@
     ],
     "folder": [
       {
+        "path": "C:\\Users\\Public\\Desktop",
+        "name": "Desktop",
+        "is_dir": true,
+        "parent": "C:\\Users\\Public",
+        "timestamp": 1774732561,
+        "datetime": "2026-03-28 22:16"
+      },
+      {
         "path": "C:\\Users\\USER\\Documents",
         "name": "Documents",
         "is_dir": true,
@@ -524,6 +665,96 @@
       }
     ],
     "browser": [
+      {
+        "intent": "BROWSER_OPEN",
+        "url": "https://www.goethe.de/frfr.html",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774788523,
+        "datetime": "2026-03-29 14:48"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "",
+        "query": "Goethe institut",
+        "site": "",
+        "tabs": 8,
+        "timestamp": 1774788465,
+        "datetime": "2026-03-29 14:47"
+      },
+      {
+        "intent": "BROWSER_OPEN",
+        "url": "https://fr.wikipedia.org/",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774788385,
+        "datetime": "2026-03-29 14:46"
+      },
+      {
+        "intent": "BROWSER_SEARCH",
+        "url": "",
+        "query": "Wikipédia",
+        "site": "",
+        "tabs": 8,
+        "timestamp": 1774788343,
+        "datetime": "2026-03-29 14:45"
+      },
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "about:blank",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774776673,
+        "datetime": "2026-03-29 11:31"
+      },
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "about:blank",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774776655,
+        "datetime": "2026-03-29 11:30"
+      },
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "about:blank",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774776631,
+        "datetime": "2026-03-29 11:30"
+      },
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "about:blank",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774776603,
+        "datetime": "2026-03-29 11:30"
+      },
+      {
+        "intent": "BROWSER_NEW_TAB",
+        "url": "about:blank",
+        "query": "",
+        "site": "",
+        "tabs": null,
+        "timestamp": 1774733045,
+        "datetime": "2026-03-28 22:24"
+      },
+      {
+        "intent": "BROWSER_SEARCH_YOUTUBE",
+        "url": "https://www.youtube.com/results?search_query=tu+cherche+loveline+ngeh+sur+youtube",
+        "query": "tu cherche loveline ngeh sur youtube",
+        "site": "youtube",
+        "tabs": null,
+        "timestamp": 1774732224,
+        "datetime": "2026-03-28 22:10"
+      },
       {
         "intent": "BROWSER_NEW_TAB",
         "url": "",
@@ -880,9 +1111,9 @@
     ]
   },
   "stats": {
-    "session_count": 131,
-    "total_commands": 111
+    "session_count": 170,
+    "total_commands": 141
   },
-  "session_count": 131,
-  "_saved_at": "2026-03-28 18:06:24"
+  "session_count": 170,
+  "_saved_at": "2026-04-02 14:57:09"
 }

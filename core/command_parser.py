@@ -71,19 +71,14 @@ def convert_intents_to_tools(enabled: bool = None) -> list:
     
     tools = []
     
-    # Liste des intents critiques à inclure (les + utilisés)
     critical_intents = {
-        "APP_OPEN", "APP_CLOSE", "BROWSER_SEARCH", "BROWSER_OPEN", "BROWSER_NEW_TAB",
-        "FILE_OPEN", "FILE_SEARCH", "FOLDER_LIST", "FILE_DELETE",
-        "AUDIO_PLAY", "AUDIO_VOLUME_SET", "AUDIO_MUTE",
-        "MUSIC_PLAY", "MUSIC_PAUSE", "MUSIC_RESUME", "MUSIC_NEXT", "MUSIC_PREV",
-        "MUSIC_PLAYLIST_PLAY", "MUSIC_PLAYLIST_ADD_SONG", "MUSIC_PLAYLIST_CREATE",
-        "SYSTEM_SHUTDOWN", "SYSTEM_RESTART", "POWER_SLEEP",
-        "SCREEN_BRIGHTNESS", "SCREEN_CAPTURE", "SCREEN_OFF",
-        "WINDOW_CLOSE", "WINDOW_LIST",
-        "SYSTEM_INFO", "SYSTEM_TIME", "SYSTEM_PROCESSES",
-        "WIFI_LIST", "WIFI_CONNECT", "BLUETOOTH_ENABLE",
-        "KNOWLEDGE_QA", "HELP",
+        "APP_OPEN", "APP_CLOSE", "BROWSER_SEARCH", "BROWSER_OPEN",
+        "FILE_OPEN", "FILE_SEARCH", "FOLDER_LIST",
+        "AUDIO_VOLUME_SET", "AUDIO_MUTE",
+        "MUSIC_PLAY", "MUSIC_PAUSE", "MUSIC_NEXT", "MUSIC_PLAYLIST_PLAY",
+        "SYSTEM_SHUTDOWN", "SYSTEM_INFO",
+        "WINDOW_CLOSE", "SCREEN_CAPTURE", "SCREEN_BRIGHTNESS",
+        "MULTI_ACTION", "KNOWLEDGE_QA", "HELP",
     }
     
     for intent_name, intent_config in INTENTS.items():
@@ -127,7 +122,7 @@ def convert_intents_to_tools(enabled: bool = None) -> list:
             
             prop = {
                 "type": json_type,
-                "description": f"Parameter {param_name}"
+                "description": param_name
             }
             
             # Pour les arrays, préciser le type des items
@@ -457,124 +452,21 @@ def format_few_shot_examples(examples: list) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 
 FEW_SHOT_EXAMPLES = [
-    ("mets chrome",                       '{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]},"confidence":0.99,"response_message":"Je lance Chrome tout de suite."}'),
-    ("monte le son un peu",               '{"intent":"AUDIO_VOLUME_UP","params":{"step":10},"confidence":0.98,"response_message":"Volume monté de 10%."}'),
-    ("mets le volume à 70",               '{"intent":"AUDIO_VOLUME_SET","params":{"level":70},"confidence":0.99,"response_message":"Volume réglé à 70%."}'),
-    ("cherche les dernières nouvelles sur python", '{"intent":"BROWSER_SEARCH","params":{"query":"dernières nouvelles python"},"confidence":0.98,"response_message":"Je lance la recherche."}'),
-    ("éteins l\'ordi dans 5 minutes",    '{"intent":"SYSTEM_SHUTDOWN","params":{"delay_seconds":300},"confidence":0.99,"response_message":"J\'éteins le PC dans 5 minutes."}'),
-    ("coupe le son",                      '{"intent":"AUDIO_MUTE","params":{},"confidence":0.99,"response_message":"Son coupé."}'),
-    ("ouvre mes documents",               '{"intent":"FOLDER_LIST","params":{"path":"Documents"},"confidence":0.97,"response_message":"J\'ouvre ton dossier Documents."}'),
-    ("classifie mes documents",           '{"intent":"FILE_CLASSIFY","params":{"move_files":false,"max_results":120},"confidence":0.98,"response_message":"Je lance une classification intelligente de tes documents en mode aperçu."}'),
-    ("prépare mon dossier de candidature", '{"intent":"FILE_PREPARE_APPLICATION","params":{"dry_run":true,"package_name":"dossier_candidature"},"confidence":0.99,"response_message":"Je prépare un aperçu de ton dossier de candidature avant création du ZIP."}'),
-    ("crée le zip de ma candidature",     '{"intent":"FILE_PREPARE_APPLICATION","params":{"dry_run":false,"package_name":"dossier_candidature"},"confidence":0.97,"response_message":"Je vais créer le ZIP de candidature après confirmation."}'),
-    ("synchronise mes documents avec google drive", '{"intent":"FILE_SYNC_DRIVE","params":{"source":"documents","mode":"copy","dry_run":true},"confidence":0.98,"response_message":"Je prépare un aperçu de la synchronisation vers Google Drive."}'),
-    ("sync google drive en mode mirror maintenant", '{"intent":"FILE_SYNC_DRIVE","params":{"source":"documents","mode":"mirror","dry_run":false},"confidence":0.97,"response_message":"Je vais lancer une synchro mirror après confirmation."}'),
-    ("va sur youtube et cherche Python tutorial", '{"intent":"BROWSER_GO_TO_SITE","params":{"site":"youtube","query":"Python tutorial"},"confidence":0.99,"response_message":"Je cherche Python tutorial sur YouTube."}'),
-    ("referme là",                        '{"intent":"WINDOW_CLOSE","params":{"query":""},"confidence":0.97,"response_message":"Je ferme la fenêtre."}'),
-    ("joue la playlist chill",            '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"chill"},"confidence":0.98,"response_message":"Je lance la playlist chill."}'),
-    ("musique suivante",                  '{"intent":"MUSIC_NEXT","params":{},"confidence":0.99,"response_message":"Piste suivante."}'),
-    ("luminosité à 70%",                  '{"intent":"SCREEN_BRIGHTNESS","params":{"level":70},"confidence":0.99,"response_message":"Luminosité réglée à 70%."}'),
-    ("mode nuit",                         '{"intent":"MACRO_RUN","params":{"name":"mode nuit"},"confidence":0.98,"response_message":"Je lance la macro mode nuit."}'),
-    ("répète la dernière commande",       '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
-    ("liste les réseaux wifi",            '{"intent":"WIFI_LIST","params":{},"confidence":0.99,"response_message":"Je cherche les réseaux Wi-Fi disponibles."}'),
-    ("donne moi les infos sur mon système", '{"intent":"SYSTEM_INFO","params":{},"confidence":0.99,"response_message":"Je récupère les informations système."}'),
-    ("il me reste combien d'espace disque", '{"intent":"SYSTEM_DISK","params":{},"confidence":0.99,"response_message":"Je vérifie l\'espace disque disponible."}'),
-    # Few-shots musique complexes — ajouter dossier à playlist
-    ("ajoute le dossier Musique a ma playlist chill",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"chill","folder":""},"confidence":0.99,"response_message":"Ajout du dossier Musique a la playlist chill."}'),
-    ("ajoute tous les songs du dossier Musique a ma playlist",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"Ajout de tous les fichiers musicaux a la playlist."}'),
-    ("mets toute ma musique dans la playlist favoris",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"favoris","folder":""},"confidence":0.98,"response_message":"Ajout de toute la bibliotheque a la playlist favoris."}'),
-    ("ajoute la chanson shape of you a ma playlist chill",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"chill","query":"shape of you"},"confidence":0.99,"response_message":"Ajout de shape of you a la playlist chill."}'),
-    # [Fix A] Distinguer fichier spécifique vs dossier entier
-    ("ajoute le fichier Boku mixed.mp3 du bureau a la playlist de travail",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"playlist de travail","query":"Boku mixed.mp3","song":"Boku mixed.mp3","folder":"bureau"},"confidence":0.99,"response_message":"Ajout du fichier Boku mixed.mp3 a la playlist de travail."}'),
-    ("ajoute le fichier Boku mixed qui est sur le bureau a la playlist coding hit",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"coding hit","query":"Boku mixed","song":"Boku mixed","folder":"bureau"},"confidence":0.99,"response_message":"Ajout de Boku mixed a la playlist coding hit."}'),
-    ("ajoute moi le fichier son lofi qui est dans les telechargements a ma playlist",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"ma playlist","query":"son lofi","song":"son lofi","folder":"téléchargements"},"confidence":0.98,"response_message":"Ajout du fichier son lofi a la playlist."}'),
-    ("ajoute le titre relaxing beats de mes documents a la playlist detente",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"detente","query":"relaxing beats","song":"relaxing beats","folder":"documents"},"confidence":0.98,"response_message":"Ajout de relaxing beats a la playlist detente."}'),
-    ("cree une playlist travail et ajoute s y le fichier son.mp3 sur le bureau",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"travail","query":"son.mp3","song":"son.mp3","folder":"bureau"},"confidence":0.99,"response_message":"Playlist creee et fichier ajoute."}'),
-    ("ajoute ce fichier mp3 a ma playlist",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"ma playlist","query":"","song":""},"confidence":0.92,"response_message":"Ajout du fichier a la playlist."}'),
-    ("ajoute le morceau lofi.flac de mes telechargements a la playlist detente",
-     '{"intent":"MUSIC_PLAYLIST_ADD_SONG","params":{"name":"detente","query":"lofi.flac","song":"lofi.flac","folder":"téléchargements"},"confidence":0.99,"response_message":"Ajout de lofi.flac a la playlist detente."}'),
-    # [Fix P1] Patterns avec structure différente que Groq rate
-    ("va dans le dossier Musique tu ajoutes a ma playlist tous les songs qui s y trouve",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"J ajoute tous les fichiers du dossier Musique a la playlist."}'),
-    ("remplis ma playlist avec tous les morceaux du dossier Musique",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"Remplissage de la playlist avec tous les morceaux."}'),
-    ("importe les musiques du dossier Musique dans ma playlist",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"Import de tous les fichiers musicaux dans la playlist."}'),
-    ("je t ai dit d ajouter a cette playlist ma liste de musique dans le dossier Musique",
-     '{"intent":"MUSIC_PLAYLIST_ADD_FOLDER","params":{"name":"ma playlist","folder":""},"confidence":0.99,"response_message":"J ajoute tous les fichiers du dossier Musique a la playlist."}'),
-    # [Fix] play_playlist existante sans préciser le nom
-    ("joue la",
-     '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"},"confidence":0.90,"response_message":"Je lance la playlist."}'),
-    ("joue alors cette playlist maintenant",
-     '{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"},"confidence":0.95,"response_message":"Je lance la playlist maintenant."}'),
-    # SEMAINE 10 — Word / Excel / PDF
-    # CV
-    ("cree un cv professionnel pour moi",
-     '{"intent":"CV_CREATE","params":{"name":"","title":"","email":"","phone":""},"confidence":0.98,"response_message":"Je vais créer ton CV. Commence par ton nom complet."}'),
-    ("genere mon cv avec mes infos",
-     '{"intent":"CV_CREATE","params":{},"confidence":0.97,"response_message":"Pour créer ton CV, j\'ai besoin de tes informations."}'),
-    ("cree un cv pour christophe ingenieur logiciel email chris@email.com",
-     '{"intent":"CV_CREATE","params":{"name":"Christophe","title":"Ingénieur Logiciel","email":"chris@email.com"},"confidence":0.99,"response_message":"Je crée le CV de Christophe."}'),
-    # Word
-    ("cree un document word avec le titre rapport et le contenu bilan du mois",
-     '{"intent":"WORD_CREATE","params":{"title":"Rapport","content":"Bilan du mois"},"confidence":0.98,"response_message":"Je crée le document Word."}'),
-    ("exporte ce fichier word en pdf",
-     '{"intent":"WORD_EXPORT_PDF","params":{"path":""},"confidence":0.97,"response_message":"Export PDF en cours."}'),
-    ("cree un rapport word sur les ventes du mois",
-     '{"intent":"REPORT_CREATE","params":{"title":"Rapport des ventes du mois","content":""},"confidence":0.97,"response_message":"Je génère le rapport Word."}'),
-    # Excel
-    ("cree un tableau excel avec les colonnes nom prenom age",
-     '{"intent":"EXCEL_CREATE","params":{"title":"Tableau","headers":["Nom","Prénom","Âge"],"rows":[]},"confidence":0.98,"response_message":"Je crée le fichier Excel."}'),
-    ("lis le fichier excel budget.xlsx",
-     '{"intent":"EXCEL_READ","params":{"path":"budget.xlsx"},"confidence":0.99,"response_message":"Lecture du fichier Excel."}'),
-    ("genere un rapport excel avec ces donnees",
-     '{"intent":"EXCEL_REPORT","params":{"title":"Rapport","data":[]},"confidence":0.95,"response_message":"Génération du rapport Excel."}'),
-    # PDF
-    ("extrais les pages 1 a 5 du fichier rapport.pdf",
-     '{"intent":"PDF_EXTRACT","params":{"path":"rapport.pdf","pages":"1-5","mode":"file"},"confidence":0.99,"response_message":"Extraction des pages 1 à 5."}'),
-    ("fusionne les fichiers doc1.pdf et doc2.pdf",
-     '{"intent":"PDF_MERGE","params":{"paths":["doc1.pdf","doc2.pdf"]},"confidence":0.99,"response_message":"Fusion des PDF en cours."}'),
-    ("decoupe le pdf en deux a partir de la page 10",
-     '{"intent":"PDF_SPLIT","params":{"path":"","split_at":10},"confidence":0.97,"response_message":"Découpe du PDF à la page 10."}'),
-    ("cherche le mot budget dans rapport.pdf",
-     '{"intent":"PDF_SEARCH","params":{"path":"rapport.pdf","keyword":"budget"},"confidence":0.99,"response_message":"Recherche dans le PDF."}'),
-    ("donne moi les infos du fichier contrat.pdf",
-     '{"intent":"PDF_INFO","params":{"path":"contrat.pdf"},"confidence":0.99,"response_message":"Infos du PDF."}'),
-        # MULTI_ACTION — commandes composées [TONY STARK V2]
-    ("ouvre chrome et joue ma playlist",
-     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]}},{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"}}]},"confidence":0.97,"response_message":"Chrome et playlist lances."}'),
-    ("mets le volume a 70 et ouvre vscode",
-     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"AUDIO_VOLUME_SET","params":{"level":70}},{"intent":"APP_OPEN","params":{"app_name":"vscode","args":[]}}]},"confidence":0.97,"response_message":"Volume 70 et VSCode."}'),
-    ("ferme chrome et eteins dans 10 minutes",
-     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_CLOSE","params":{"app_name":"chrome"}},{"intent":"SYSTEM_SHUTDOWN","params":{"delay_seconds":600}}]},"confidence":0.96,"response_message":"Chrome ferme, extinction dans 10 min."}'),
-    ("ouvre chrome cherche python et joue ma playlist",
-     '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_OPEN","params":{"app_name":"chrome","args":[]}},{"intent":"BROWSER_SEARCH","params":{"query":"python"}},{"intent":"MUSIC_PLAYLIST_PLAY","params":{"name":"ma playlist"}}]},"confidence":0.95,"response_message":"Chrome, recherche Python, et playlist."}'),
-    # PREFERENCE_SET — mémorisation préférences utilisateur
-    ("j aime jouer ma playlist quand je code",
-     '{"intent":"PREFERENCE_SET","params":{"label":"codage","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Je retiens que ta playlist de codage est ma playlist."}'),
-    ("mon son de travail c est ma playlist",
-     '{"intent":"PREFERENCE_SET","params":{"label":"travail","value":"ma playlist","category":"music"},"confidence":0.98,"response_message":"Je note que ta musique de travail est ma playlist."}'),
-    ("quand je passe en mode travail je joue ma playlist",
-     '{"intent":"PREFERENCE_SET","params":{"label":"travail","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Je mémorise ca comme ta playlist de travail."}'),
-    ("retiens que mon volume de travail c est 60 pourcent",
-     '{"intent":"PREFERENCE_SET","params":{"label":"travail","value":"60","category":"volume"},"confidence":0.98,"response_message":"Volume de travail enregistre a 60 pourcent."}'),
-    ("associe cette playlist au mode detente",
-     '{"intent":"PREFERENCE_SET","params":{"label":"detente","value":"ma playlist","category":"music"},"confidence":0.97,"response_message":"Playlist associee au mode detente."}'),
-    # [Bug6] Few-shots explicites pour REPEAT_LAST — évite la confusion avec MEMORY_SHOW
-    ("répète la dernière commande", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète la dernière commande."}'),
-    ("rejoue la commande précédente", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je relance la commande précédente."}'),
-    ("refais la même chose", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je relance la même action."}'),
-    ("encore une fois", '{"intent":"REPEAT_LAST","params":{},"confidence":0.99,"response_message":"Je répète."}'),
+    ("ouvre chrome",            '{"intent":"APP_OPEN","params":{"app_name":"chrome"},"confidence":0.99}'),
+    ("ferme notepad",          '{"intent":"APP_CLOSE","params":{"app_name":"notepad"},"confidence":0.95}'),
+    ("cherche python",         '{"intent":"BROWSER_SEARCH","params":{"query":"python"},"confidence":0.99}'),
+    ("nouvel onglet google",   '{"intent":"BROWSER_NEW_TAB","params":{"url":"google.com"},"confidence":0.95}'),
+    ("volume 70",             '{"intent":"AUDIO_VOLUME_SET","params":{"level":70},"confidence":0.99}'),
+    ("monte le son",           '{"intent":"AUDIO_VOLUME_UP","params":{"step":10},"confidence":0.95}'),
+    ("cherche fichier test",   '{"intent":"FILE_SEARCH","params":{"query":"test"},"confidence":0.95}'),
+    ("ouvre document.pdf",    '{"intent":"FILE_OPEN","params":{"path":"document.pdf"},"confidence":0.95}'),
+    ("éteins PC",             '{"intent":"SYSTEM_SHUTDOWN","params":{},"confidence":0.99}'),
+    ("informations système",   '{"intent":"SYSTEM_INFO","params":{},"confidence":0.95}'),
+    ("joue Relax",            '{"intent":"MUSIC_PLAY","params":{"query":"Relax"},"confidence":0.95}'),
+    ("pause musique",          '{"intent":"MUSIC_PAUSE","params":{},"confidence":0.98}'),
+    ("ferme cette fenêtre",   '{"intent":"WINDOW_CLOSE","params":{"query":""},"confidence":0.95}'),
+    ("capture d'écran",       '{"intent":"SCREEN_CAPTURE","params":{},"confidence":0.98}'),
+    ("ouvre chrome et cherche météo puis mets le volume à 50", '{"intent":"MULTI_ACTION","params":{"actions":[{"intent":"APP_OPEN","params":{"app_name":"chrome"}},{"intent":"BROWSER_SEARCH","params":{"query":"météo"}},{"intent":"AUDIO_VOLUME_SET","params":{"level":50}}]},"confidence":0.90}'),
 ]
 
 
@@ -653,11 +545,11 @@ class CommandParser:
         if self._can_use_groq():
             for attempt in range(retries + 1):
                 try:
-                    result           = self._call_groq_ai(command, history=[])
-                    result           = self._semantic_guard(command, result)
-                    # [C3] _postprocess_result appelé en dernière ligne de défense
-                    result           = self._postprocess_result(command, result)
-                    result["source"] = "groq"
+                    result = self._finalize_parse_result(
+                        command=command,
+                        result=self._call_groq_ai(command, history=[]),
+                        source="groq",
+                    )
                     logger.info(f"Intent: {result['intent']} (conf={result['confidence']:.2f}, src=groq)")
                     return result
                 except Exception as e:
@@ -670,38 +562,96 @@ class CommandParser:
                     if attempt < retries:
                         time.sleep(0.5 * (attempt + 1))
 
-        result           = self._semantic_guard(command, self._fallback_keywords(command))
-        # [C3] _postprocess_result appelé aussi sur le fallback
-        result           = self._postprocess_result(command, result)
-        result["source"] = "fallback"
-        return result
+        return self._finalize_parse_result(
+            command=command,
+            result=self._fallback_keywords(command),
+            source="fallback",
+        )
 
     def parse_with_context(self, command: str, history: list = None, retries: int = 2) -> dict:
         """
-        Pipeline hybride : Fast Rules → Embeddings → Local LLM → Groq
+        QUALITY-FIRST HYBRID PIPELINE pour données d'entraînement "premium"
+        
+        Stratégie:
+          - Priorité: Comprendre correctement avec contexte (quitte à prendre du temps)
+          - Groq + contexte historique = meilleure compréhension
+          - Validation stricte: ≥0.95 = "premium training data"
+          - < 0.95 = "uncertain, needs admin review"
+        
+        Cette approche maximise la QUALITÉ du dataset pour fine-tuning local
+        plutôt que la rapidité de réponse.
         """
         from config.settings import LOCAL_LLM_ENABLED
 
-        # ── Étape 1 : Fast rules (regex/keywords) ────────────────────────
-        # Conserver le fallback_keywords() existant
-        fallback_result = self._fallback_keywords(command)
-        if fallback_result and fallback_result.get("confidence", 0) >= 0.90:
-            fallback_result["source"] = "fast_rules"
-            return fallback_result
+        # ── NIVEAU 1 : GROQ AVEC CONTEXTE COMPLET (slow but sure) ─────────
+        # C'est le cœur de votre stratégie: laisser Groq utiliser l'HISTORIQUE
+        # pour vraiment comprendre l'intention, même si ça prend 1-2 secondes
+        
+        if self._can_use_groq():
+            try:
+                groq_result = self._call_groq_ai(command, history or [])
+                result = self._finalize_parse_result(
+                    command=command,
+                    result=groq_result,
+                    source="groq",
+                )
+                
+                # VALIDATION STRICTE pour dataset
+                confidence = result.get("confidence", 0)
+                if confidence >= 0.95:
+                    # ✅ EXCELLENT: données d'entraînement premium
+                    logger.info(
+                        f"[PREMIUM DATA] Groq {result['intent']} "
+                        f"(conf={confidence:.2f}, source=groq+context)"
+                    )
+                    return result
+                else:
+                    # ⚠️ BON SIGNAL: confiance < 0.95 → tenter fallback pour améliorer
+                    logger.info(
+                        f"[QUALITY CHECK] Groq partiellement confiant "
+                        f"({confidence:.2f}), tentant amélioration via fallbacks"
+                    )
+                    
+                    # Essayer améliorer avec embeds ou local LLM
+                    improved = self._try_improve_confidence(command, result, 0.95)
+                    if improved:
+                        logger.info(
+                            f"[IMPROVED] Intent {improved['intent']} "
+                            f"({improved['confidence']:.2f})"
+                        )
+                        return improved
+                    
+                    # Si pas d'amélioration, retourner Groq mais marquer "uncertain"
+                    result["quality_flag"] = "uncertain_needs_review"
+                    return result
+            except Exception as e:
+                logger.warning(f"Groq failed: {e}, falling back")
+                self._set_groq_cooldown_from_error(e)
 
+        # ── NIVEAU 2 : FALLBACK (si Groq indisponible) ────────────────────
+        # Seulement utilisé pour rate-limit / downtime Groq
+        logger.warning("[FALLBACK MODE] Groq unavailable, using fallback chain")
+        
+        # Embedding Router
         if LOCAL_LLM_ENABLED:
-            # ── Étape 2 : Embedding Router ───────────────────────────────
             try:
                 from core.embedding_router import EmbeddingRouter
                 if not hasattr(self, '_embed_router'):
                     self._embed_router = EmbeddingRouter()
                 embed_result = self._embed_router.route(command)
-                if embed_result and embed_result.get("confidence", 0) >= 0.82:
-                    return embed_result
+                if embed_result and embed_result.get("confidence", 0) >= 0.85:
+                    result = self._finalize_parse_result(
+                        command=command,
+                        result=embed_result,
+                        source="embedding",
+                    )
+                    result["quality_flag"] = "fallback_embedding"
+                    return result
             except Exception as e:
                 logger.debug(f"EmbeddingRouter skipped: {e}")
 
-            # ── Étape 3 : Local LLM ──────────────────────────────────────
+        # Local LLM
+        if LOCAL_LLM_ENABLED:
             try:
                 from core.local_llm import LocalLLMParser
                 from core.dataset_builder import load_examples
@@ -710,17 +660,85 @@ class CommandParser:
                 if self._local_llm.is_available:
                     examples = load_examples(n=40, min_confidence=0.85)
                     local_result = self._local_llm.parse(command, examples)
-                    if local_result.get("confidence", 0) >= 0.75:
-                        # Logger dans le dataset pour amélioration continue
-                        from core.dataset_builder import save_entry
-                        save_entry(command, local_result, source="local_llm")
-                        return local_result
+                    if local_result.get("confidence", 0) >= 0.80:
+                        result = self._finalize_parse_result(
+                            command=command,
+                            result=local_result,
+                            source="local_llm",
+                        )
+                        result["quality_flag"] = "fallback_local_llm"
+                        return result
             except Exception as e:
                 logger.debug(f"LocalLLM skipped: {e}")
 
-        # ── Étape 4 : Groq (fallback) ─────────────────────────────────────
-        groq_result = self._call_groq_ai(command, history or [])
-        return groq_result
+        # Fast rules (dernier recours)
+        fallback_result = self._fallback_keywords(command)
+        if fallback_result and fallback_result.get("confidence", 0) >= 0.85:
+            result = self._finalize_parse_result(
+                command=command,
+                result=fallback_result,
+                source="fast_rules",
+            )
+            result["quality_flag"] = "fallback_fast_rules"
+            return result
+
+        # Unknown
+        result = self._finalize_parse_result(
+            command=command,
+            result=self._unknown(command, "No parser available"),
+            source="fallback",
+        )
+        result["quality_flag"] = "unknown"
+        return result
+    
+    def _try_improve_confidence(self, command: str, base_result: dict, target_conf: float):
+        """
+        Tente d'améliorer la confiance d'un résultat Groq < 0.95
+        en utilisant des engines complémentaires.
+        Retourne le résultat amélioré si possible, None sinon.
+        """
+        from config.settings import LOCAL_LLM_ENABLED
+        
+        base_intent = base_result.get("intent", "UNKNOWN")
+        base_conf = base_result.get("confidence", 0)
+        
+        # Essayer embeddings
+        if LOCAL_LLM_ENABLED:
+            try:
+                from core.embedding_router import EmbeddingRouter
+                if not hasattr(self, '_embed_router'):
+                    self._embed_router = EmbeddingRouter()
+                embed_result = self._embed_router.route(command)
+                
+                if (embed_result and 
+                    embed_result.get("intent") == base_intent and
+                    embed_result.get("confidence", 0) > base_conf):
+                    
+                    logger.info(
+                        f"[IMPROVE] Embedding confirmed {base_intent} "
+                        f"({embed_result['confidence']:.2f} > {base_conf:.2f})"
+                    )
+                    
+                    # Fusionner: prendre Groq mais boost confiance avec embedding
+                    improved = base_result.copy()
+                    improved["confidence"] = max(base_conf, embed_result.get("confidence", base_conf))
+                    improved["secondary_source"] = "embedding_confirmed"
+                    return improved
+            except Exception as e:
+                logger.debug(f"Improvement via embedding failed: {e}")
+        
+        return None
+
+    def _finalize_parse_result(self, command: str, result: dict, source: str) -> dict:
+        """
+        Applique systématiquement les garde-fous finaux pour tous les moteurs
+        de parsing (Groq, embedding, local llm, fast rules).
+        """
+        out = result if isinstance(result, dict) else self._unknown(command, "Invalid parser result")
+        out = self._semantic_guard(command, out)
+        out = self._postprocess_result(command, out)
+        out["source"] = source
+        return out
 
     # ──────────────────────────────────────────────────────────────────────────
     #  APPEL GROQ — [C2] CORRIGÉ
@@ -758,9 +776,9 @@ class CommandParser:
         # Few-shot examples (toujours en tête pour ancrer le format JSON)
         messages.extend(format_few_shot_examples(FEW_SHOT_EXAMPLES))
 
-        # [C2] Historique : inclure user ET assistant, pas seulement user
+        # [C2] Historique : inclure user ET assistant (limité à 6 pour <6000 tokens)
         if history_to_use:
-            for msg in history_to_use[-12:]:
+            for msg in history_to_use[-6:]:
                 role    = msg.get("role", "user")
                 content = str(msg.get("content", "")).strip()
 

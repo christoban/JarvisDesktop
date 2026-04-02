@@ -8,19 +8,25 @@ Responsabilités :
   - Opérations sur les onglets : list, new, switch, close, navigate, back, forward, reload
   - Primitive cdp_call / cdp_eval pour envoyer des commandes DevTools
 
-Chrome DOIT être lancé avec :
-  --remote-debugging-port=9222
-  (BrowserAutomation.ensure_session() le fait automatiquement)
+STRATÉGIE DE CONNEXION (ordre de priorité) :
+  1. Chrome déjà lancé avec CDP (port 9222 actif) → connexion directe, zéro perturbation.
+  2. Chrome normal détecté (sans CDP) → relancé avec --remote-debugging-port=9222
+     sur le MÊME profil utilisateur (~/AppData/Local/Google/Chrome/User Data).
+     Les onglets sont restaurés automatiquement par Chrome (session restore).
+  3. Aucun Chrome → nouveau Chrome sur le profil natif avec CDP.
 
-CORRECTIONS :
+     => Résultat : Jarvis interagit toujours sur la fenêtre Chrome que l'utilisateur
+       utilise au quotidien. Plus de double instance.
+
+DÉMARRAGE AUTOMATIQUE (recommandé) :
+  Placer le raccourci `Jarvis-Chrome.lnk` dans le dossier Demarrage Windows
+  (APPDATA/Microsoft/Windows/Start Menu/Programs/Startup) pour que Chrome
+  soit toujours prêt avec CDP dès l'allumage.
+  Voir : setup/create_chrome_startup.ps1
+
+CORRECTIONS ANTÉRIEURES :
   [Bug 5] Ajout de execute_js() — alias de cdp_eval() utilisé par page_actions.py.
-          Avant : page_actions.py appelait self._session.execute_js(tab, js)
-                  → AttributeError : 'CDPSession' object has no attribute 'execute_js'
-          Après : execute_js() délègue à cdp_eval() avec gestion du résultat JS.
-
-  [Bug 4] new_tab() robuste : si Chrome est déjà en debug mais n'a pas d'onglet
-          accessible (ex: chrome://newtab uniquement), on navigue dans l'onglet
-          existant plutôt que d'ouvrir une nouvelle fenêtre système.
+  [Bug 4] new_tab() robuste : navigation dans l'onglet existant si Chrome vient de démarrer.
           Ajout de focus_tab() utilisé par browser_control.switch_to_tab().
 """
 
@@ -55,7 +61,6 @@ try:
 except ImportError:
     _WIN32_AVAILABLE = False
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -75,7 +80,6 @@ class CDPSession:
     def __init__(self, debug_port: int = 9222):
         self.debug_port = debug_port
         self._base = f"http://127.0.0.1:{debug_port}"
-        # Stockage partagé des résultats de recherche (correction B14)
         self._shared_search_results: list = []
 
     # ── Santé de la session ───────────────────────────────────────────────────
@@ -88,7 +92,14 @@ class CDPSession:
             return False
 
     def ensure_session(self, launch_if_missing: bool = True) -> dict:
-        """S'assure que Chrome est lancé en mode debug. Le lance si nécessaire."""
+        """
+        S'assure que Chrome est lancé en mode debug.
+
+        Ordre de tentatives :
+          1. CDP déjà actif → OK immédiat.
+          2. Chrome normal en cours → relancé avec CDP (même profil).
+          3. Aucun Chrome → lancé avec CDP (profil natif).
+        """
         if self.is_ready():
             return self._ok("Session CDP prête.", {"port": self.debug_port})
 
@@ -96,19 +107,22 @@ class CDPSession:
             return self._err(
                 "Chrome n'est pas en mode pilotable.",
                 {
-                    "tip": "Lance Chrome avec --remote-debugging-port=9222, "
-                           "ou dis 'ouvre chrome' pour que Jarvis le fasse.",
+                    "tip": "Dis 'ouvre chrome' pour que Jarvis le connecte.",
                     "action_required": True,
                 },
             )
 
-        result = self._launch_debug_chrome()
+        # Essayer de relancer le Chrome existant (ou lancer un nouveau) avec CDP
+        result = self._connect_or_launch_chrome()
         if not result["success"]:
             return result
 
         for _ in range(24):   # ~6 secondes max
             if self.is_ready():
-                return self._ok("Chrome lancé en mode pilotable.", {"port": self.debug_port, "launched": True})
+                return self._ok(
+                    "Chrome connecté en mode pilotable.",
+                    {"port": self.debug_port, "launched": True}
+                )
             time.sleep(0.25)
 
         return self._err(
@@ -182,11 +196,21 @@ class CDPSession:
 
     def new_tab(self, url: str = "about:blank") -> dict:
         """
-        Ouvre un nouvel onglet CDP.
+        Ouvre un nouvel onglet dans la MÊME fenêtre Chrome (comportement Ctrl+T).
 
-        [Bug 4] Si Chrome vient d'être lancé et n'a qu'un onglet interne
-        (chrome://newtab), on navigue dans cet onglet plutôt que d'ouvrir
-        une nouvelle fenêtre système via /json/new.
+        Stratégie en 3 niveaux, du plus fiable au moins fiable :
+
+        [Niveau 1] Cas spécial démarrage : Chrome vient d'être lancé et n'a
+                   qu'un onglet interne vide → on navigue dedans plutôt que
+                   d'en créer un nouveau.
+
+        [Niveau 2] Simulation Ctrl+T via Input.dispatchKeyEvent CDP.
+                   C'est exactement ce que fait l'utilisateur manuellement.
+                   Chrome crée TOUJOURS un onglet dans la fenêtre active.
+                   On attend ensuite que le nouvel onglet apparaisse dans /json,
+                   puis on y navigue si une URL est fournie.
+
+        [Niveau 3] Fallback /json/new si Ctrl+T échoue (rare).
         """
         ready = self.ensure_session(launch_if_missing=True)
         if not ready["success"]:
@@ -194,44 +218,103 @@ class CDPSession:
 
         target_url = normalize_url(url) if url and url != "about:blank" else ""
 
-        # [Bug 4] Vérifier si on a des onglets utilisables (non-internes)
+        # ── Niveau 1 : Chrome tout juste lancé, onglet interne vide ──────────
         all_tabs = self.get_tabs(include_internal=True)
         user_tabs = [t for t in all_tabs if not t.url.startswith("chrome://")]
-
-        # Si Chrome vient d'être lancé et n'a que des onglets internes,
-        # naviguer dans le premier onglet interne plutôt qu'ouvrir une fenêtre
         if not user_tabs and all_tabs and target_url:
             nav = self.navigate_tab(all_tabs[0], target_url)
             if nav["success"]:
+                logger.info("new_tab [N1] : onglet interne réutilisé.")
                 return self._ok(
                     f"Onglet ouvert : {target_url}",
-                    {"url": target_url, "title": all_tabs[0].title, "reused": True}
+                    {"url": target_url, "reused": True}
                 )
 
-        # Cas normal : ouvrir un vrai nouvel onglet via CDP
+        # ── Niveau 2 : Simulation Ctrl+T via CDP ─────────────────────────────
+        tabs_before = self.get_tabs(include_internal=True)
+        ids_before  = {t.id for t in tabs_before}
+
+        active_tab = (self.get_tabs() or self.get_tabs(include_internal=True) or [None])[0]
+        if not active_tab:
+            return self._err("Aucun onglet disponible pour créer un nouvel onglet.")
+
+        ws_url = active_tab.websocket_url
+        ctrl_t_ok = False
+
+        if ws_url and _WS_AVAILABLE:
+            try:
+                ws = create_connection(ws_url, timeout=5)
+
+                ws.send(json.dumps({"id": 1, "method": "Input.dispatchKeyEvent", "params": {
+                    "type": "keyDown",
+                    "modifiers": 2,
+                    "key": "t",
+                    "code": "KeyT",
+                    "windowsVirtualKeyCode": 84,
+                    "nativeVirtualKeyCode":  84,
+                }}))
+                ws.recv()
+
+                ws.send(json.dumps({"id": 2, "method": "Input.dispatchKeyEvent", "params": {
+                    "type": "keyUp",
+                    "modifiers": 2,
+                    "key": "t",
+                    "code": "KeyT",
+                    "windowsVirtualKeyCode": 84,
+                    "nativeVirtualKeyCode":  84,
+                }}))
+                ws.recv()
+                ws.close()
+                ctrl_t_ok = True
+                logger.info("new_tab [N2] : Ctrl+T envoyé via CDP.")
+            except Exception as e:
+                logger.debug(f"new_tab [N2] Ctrl+T échoué : {e}")
+
+        if ctrl_t_ok:
+            new_tab = None
+            for _ in range(12):
+                time.sleep(0.25)
+                tabs_after = self.get_tabs(include_internal=True)
+                new_tabs = [t for t in tabs_after if t.id not in ids_before]
+                if new_tabs:
+                    new_tab = new_tabs[0]
+                    break
+
+            if new_tab:
+                if target_url:
+                    time.sleep(0.3)
+                    self.navigate_tab(new_tab, target_url)
+                    logger.info(f"new_tab [N2] : nouvel onglet → {target_url}")
+                    return self._ok(
+                        f"Nouvel onglet ouvert : {target_url}",
+                        {"url": target_url, "tab_id": new_tab.id}
+                    )
+                else:
+                    logger.info("new_tab [N2] : nouvel onglet vide créé.")
+                    return self._ok(
+                        "Nouvel onglet ouvert.",
+                        {"url": "about:blank", "tab_id": new_tab.id}
+                    )
+            else:
+                logger.warning("new_tab [N2] : Ctrl+T envoyé mais aucun nouvel onglet détecté.")
+
+        # ── Niveau 3 : Fallback /json/new ────────────────────────────────────
+        logger.info("new_tab [N3] : fallback /json/new")
+        return self._new_tab_fallback(target_url)
+
+    def _new_tab_fallback(self, target_url: str = "") -> dict:
+        """Fallback: méthode originale avec /json/new."""
         endpoint = f"{self._base}/json/new"
         if target_url:
             endpoint += f"?{urllib.parse.quote(target_url, safe=':/?&=%')}"
 
         try:
-            # Chrome récent préfère PUT sur /json/new
             resp = requests.put(endpoint, timeout=3)
             if resp.status_code >= 400:
                 resp = requests.get(endpoint, timeout=3)
             if resp.status_code >= 400:
                 return self._err(f"Impossible d'ouvrir un nouvel onglet (HTTP {resp.status_code}).")
             data = resp.json() if resp.text else {}
-            new_tab_id = data.get("id", "")
-
-            # Si une URL est demandée et que le tab a été créé sur about:blank,
-            # naviguer explicitement vers l'URL cible
-            if target_url and new_tab_id:
-                tabs = self.get_tabs()
-                target_tab = next((t for t in tabs if t.id == new_tab_id), None)
-                if target_tab:
-                    time.sleep(0.3)
-                    self.navigate_tab(target_tab, target_url)
-
             return self._ok(
                 "Nouvel onglet ouvert.",
                 {"url": target_url or "about:blank", "title": data.get("title", "")}
@@ -240,11 +323,7 @@ class CDPSession:
             return self._err(f"Erreur nouvel onglet: {e}")
 
     def focus_tab(self, tab: CDPTab) -> dict:
-        """
-        Met un onglet au premier plan (focus).
-        Utilisé par browser_control.switch_to_tab().
-        Alias de activate_tab() pour une API plus claire.
-        """
+        """Met un onglet au premier plan. Alias de activate_tab()."""
         return self.activate_tab(tab)
 
     def activate_tab(self, tab: CDPTab) -> dict:
@@ -371,29 +450,11 @@ class CDPSession:
     def execute_js(self, tab: CDPTab, expression: str, await_promise: bool = False):
         """
         [Bug 5] Alias de cdp_eval() utilisé par page_actions.py.
-
-        Avant cette correction, page_actions.py appelait :
-            self._session.execute_js(tab, js)
-        ce qui provoquait :
-            AttributeError: 'CDPSession' object has no attribute 'execute_js'
-
-        Cette méthode retourne directement la valeur JS (pas le dict complet)
-        pour rester compatible avec l'usage dans page_actions.py qui attend
-        le résultat brut (liste, dict, str, None...).
-
-        Exemples d'appels dans page_actions.py :
-            raw = self._session.execute_js(tab, js)
-            if isinstance(raw, list):  # résultats de recherche
-            ...
-            result = self._session.execute_js(tab, js)
-            if isinstance(result, dict) and result.get("ok"):  # fill_field
+        Retourne directement la valeur JS (pas le dict complet).
         """
         result = self.cdp_eval(tab, expression, await_promise=await_promise)
         if not result["success"]:
-            # Lever une exception pour que page_actions.py puisse la capturer
-            # avec son try/except habituel
             raise RuntimeError(f"execute_js échoué: {result.get('message', 'erreur inconnue')}")
-        # Retourner directement la valeur, pas le dict complet
         return result.get("data")
 
     def navigate_tab(self, tab: CDPTab, url: str) -> dict:
@@ -454,39 +515,101 @@ class CDPSession:
             lines.append(f"  {t['index']}. {t['title']}  ({t['process']})")
         return "\n".join(lines)
 
-    # ── Lancement Chrome debug ────────────────────────────────────────────────
+    # ── Connexion / Lancement Chrome avec CDP ─────────────────────────────────
 
-    def _launch_debug_chrome(self) -> dict:
-        profile_dir = Path.home() / "AppData" / "Local" / "JarvisChrome"
-        profile_dir.mkdir(parents=True, exist_ok=True)
+    def _connect_or_launch_chrome(self) -> dict:
+        """
+        Stratégie intelligente de connexion à Chrome :
 
-        exes = [
-            "chrome",
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            "msedge",
-            "brave",
-        ]
+        1. Tente de se connecter à un Chrome normal déjà ouvert en le relançant
+           avec --remote-debugging-port sur le MÊME profil utilisateur.
+           Chrome récupère ses onglets via la restauration de session.
+
+        2. Si aucun Chrome n'est ouvert, lance Chrome normalement avec CDP
+           sur le profil natif.
+
+        Dans les deux cas, l'utilisateur garde son profil habituel (extensions,
+        historique, mots de passe). Aucun profil séparé "JarvisChrome".
+        """
+        chrome_exe = self._find_chrome_exe()
+        if not chrome_exe:
+            return self._err(
+                "Google Chrome est introuvable sur ce système.",
+                {"tip": "Vérifie que Chrome est installé."},
+            )
+
+        # Profil natif de l'utilisateur (même que Chrome normal)
+        # Utilisation de Path() pour éviter les problèmes d'échappement Windows
+        native_profile = Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "User Data"
+        native_profile = str(native_profile)
+
         flags = [
             f"--remote-debugging-port={self.debug_port}",
             "--remote-allow-origins=*",
-            f"--user-data-dir={profile_dir}",
+            f"--user-data-dir={native_profile}",
             "--no-first-run",
             "--no-default-browser-check",
+            "--restore-last-session",   # restaure les onglets ouverts avant fermeture
         ]
 
-        for exe in exes:
-            try:
-                subprocess.Popen([exe, *flags], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                logger.info(f"Chrome debug lancé: {exe}")
-                return self._ok("Chrome lancé en mode pilotable.", {"exe": exe})
-            except Exception:
-                continue
+        # Si Chrome tourne déjà (sans CDP), on le ferme proprement puis on relance
+        chrome_was_running = self._is_chrome_running()
+        if chrome_was_running:
+            logger.info("Chrome normal détecté. Relancement avec CDP sur le même profil...")
+            self._close_chrome_gracefully()
+            time.sleep(1.5)  # attendre la fermeture complète
 
-        return self._err(
-            "Impossible de lancer Chrome en mode pilotable.",
-            {"tip": "Vérifie que Google Chrome est installé."},
-        )
+        try:
+            subprocess.Popen(
+                [chrome_exe, *flags],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            mode = "relancé" if chrome_was_running else "lancé"
+            logger.info(f"Chrome {mode} avec CDP : {chrome_exe}")
+            return self._ok(f"Chrome {mode} en mode pilotable.", {"exe": chrome_exe})
+        except Exception as e:
+            return self._err(f"Impossible de lancer Chrome: {e}")
+
+    def _find_chrome_exe(self) -> str | None:
+        """Trouve l'exécutable Chrome sur le système."""
+        candidates = [
+            r"C:/Program Files\Google\Chrome/Application\chrome.exe",
+            r"C:/Program Files (x86)\Google\Chrome/Application\chrome.exe",
+            Path.home() / "AppData" / "Local" / "Google" / "Chrome" / "Application" / "chrome.exe",
+        ]
+        for path in candidates:
+            if Path(path).exists():
+                return str(path)
+        # Fallback : laisser le PATH gérer
+        return "chrome"
+
+    def _is_chrome_running(self) -> bool:
+        """Détecte si Chrome tourne actuellement (sans nécessairement avoir CDP)."""
+        try:
+            import psutil
+            for proc in psutil.process_iter(["name"]):
+                if proc.info.get("name", "").lower() == "chrome.exe":
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def _close_chrome_gracefully(self) -> None:
+        """
+        Ferme Chrome proprement via taskkill /IM.
+        Chrome sauvegarde la session avant de quitter → restauration au prochain lancement.
+        """
+        try:
+            subprocess.run(
+                ["taskkill", "/IM", "chrome.exe", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+            logger.info("Chrome fermé proprement pour relancement avec CDP.")
+        except Exception as e:
+            logger.warning(f"Fermeture Chrome échouée: {e}")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
